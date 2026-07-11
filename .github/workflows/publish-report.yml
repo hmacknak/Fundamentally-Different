@@ -1,0 +1,38 @@
+name: Publish Market Priority Report
+
+# Quarterly rebalance + on-demand run (docs/AUTOMATION_AND_DEPLOYMENT.md).
+# "Run the Market Priority Report" from the PRD maps to workflow_dispatch:
+# a non-technical owner triggers this from the GitHub Actions tab, no code
+# or terminal required.
+#
+# Requires the SAME persistent DATABASE_URL secret as ingest.yml so this job
+# can see data that job ingested — without it, this will reliably report
+# "blocked" (empty database) rather than publish anything, since a fresh
+# ephemeral database has no ingested prices/macro/fundamentals to check.
+# See docs/DECISIONS.md.
+#
+# The report artifact is uploaded so it's retrievable even before a
+# persistent report store (e.g. cloud storage) is wired up.
+on:
+  schedule:
+    - cron: "0 13 1 1,4,7,10 *"
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python run_report.py --output output
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: market-priority-report
+          path: output/
