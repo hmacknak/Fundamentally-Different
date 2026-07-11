@@ -112,7 +112,8 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
 
     # ---- ranks ----
     L.append("\n## Top-ranked candidates under the current priority weights")
-    L.append("\nRanking is downstream of the diagnosis. Weights (positive-score normalized): "
+    L.append("\nRanking is downstream of the diagnosis. Weights (positive-score normalized, "
+             "averaged over the trailing quarters to avoid one hot quarter dominating): "
              + ", ".join(f"{k} {v:.0%}" for k, v in weights.items() if v > 0.001))
     L.append("\n| # | Ticker | Composite |")
     L.append("|---|---|---|")
@@ -126,10 +127,21 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
         L.append(f"\nAt each of {wf['n_periods']} historical rebalance date(s), ranked stocks "
                  f"using only priority scores available as of that date, then measured the "
                  f"realized forward excess return of the resulting top-N portfolio.")
-        L.append("\n| Periods | Mean forward excess return | ±SE | t | Hit rate |")
+        L.append("\n| | Mean forward excess return | ±SE | t | Hit rate |")
         L.append("|---|---|---|---|---|")
-        L.append(f"| {wf['n_periods']} | {_fmt(wf['mean_forward_excess_return'], 4)} | "
+        L.append(f"| Raw ({wf['n_periods']} periods) | {_fmt(wf['mean_forward_excess_return'], 4)} | "
                  f"{_fmt(wf['se'], 4)} | {_fmt(wf['t_stat'], 2)} | {_fmt(wf['hit_rate'], 2)} |")
+        if "mean_forward_excess_return_winsorized" in wf:
+            limit_pct = wf.get("winsorize_limit", 0.05) * 100
+            L.append(f"| Winsorized (±{limit_pct:.0f}%ile capped) | "
+                     f"{_fmt(wf['mean_forward_excess_return_winsorized'], 4)} | "
+                     f"{_fmt(wf['se_winsorized'], 4)} | {_fmt(wf['t_stat_winsorized'], 2)} | n/a |")
+            L.append("\nThe winsorized row caps the most extreme per-period returns at the "
+                     f"{limit_pct:.0f}th/{100 - limit_pct:.0f}th percentile before averaging, so "
+                     "a couple of outsized quarters can't single-handedly set the headline "
+                     "number. It's a robustness check, not a replacement for the raw row above "
+                     "-- a large gap between the two rows means the raw result is being driven "
+                     "by a small number of periods and should be read with extra caution.")
         if wf["warning"]:
             L.append(f"\n**{wf['warning']}**")
 

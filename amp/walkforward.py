@@ -25,7 +25,8 @@ import pandas as pd
 from . import priorities
 
 
-def walk_forward_evaluate(panel, priority_scores, factors_present, top_n=20):
+def walk_forward_evaluate(panel, priority_scores, factors_present, top_n=20,
+                          weight_smoothing_periods=priorities.WEIGHT_SMOOTHING_PERIODS):
     """For each historical rebalance date with usable priority scores, rank
     stocks using ONLY that date's priority scores, then look up the realized
     forward excess return of the resulting top-N portfolio.
@@ -36,7 +37,8 @@ def walk_forward_evaluate(panel, priority_scores, factors_present, top_n=20):
     rows = []
     for dt in dates:
         ranks, _weights, _ranked_date = priorities.composite_stock_ranks(
-            panel, priority_scores, factors_present, top_n=top_n, as_of_date=dt)
+            panel, priority_scores, factors_present, top_n=top_n, as_of_date=dt,
+            weight_smoothing_periods=weight_smoothing_periods)
         if ranks.empty:
             continue
         fwd = panel[panel["date"] == dt].set_index("ticker")["forward_excess_return"]
@@ -57,11 +59,40 @@ def walk_forward_evaluate(panel, priority_scores, factors_present, top_n=20):
 
 SMALL_SAMPLE_THRESHOLD = 20
 
+# Cap each tail at this quantile before computing the winsorized headline
+# stats below. 2026-07-11 (see docs/DECISIONS.md): added after real walk-forward
+# data showed 2 of 38 quarters -- both large momentum-driven moves -- accounted
+# for most of the headline mean return. Winsorizing bounds any single
+# quarter's influence without discarding it, and is reported ALONGSIDE the raw
+# stats (never in place of them) so the outlier sensitivity stays visible
+# rather than silently smoothed away.
+WINSORIZE_LIMIT = 0.05
+
+
+def _winsorized_mean_se_t(values):
+    n = len(values)
+    if n < 4:
+        # too few points for percentile capping to mean anything distinct
+        # from the raw mean -- skip capping rather than clip on a coin flip
+        capped = values
+    else:
+        lo, hi = np.quantile(values, [WINSORIZE_LIMIT, 1 - WINSORIZE_LIMIT])
+        capped = values.clip(lower=lo, upper=hi)
+    mean = float(capped.mean())
+    se = float(capped.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan
+    t_stat = mean / se if se and se > 0 else np.nan
+    return mean, se, t_stat
+
 
 def summarize_walk_forward(wf_results):
     """Headline stats with an explicit small-sample warning -- the number of
     real rebalance periods this project has seen is the actual constraint on
-    how much to trust these numbers, not anything about the code."""
+    how much to trust these numbers, not anything about the code.
+
+    Reports both the raw stats and a winsorized variant (see WINSORIZE_LIMIT)
+    side by side -- winsorizing is a robustness check on outlier sensitivity,
+    not a replacement for the raw number, so both are always returned.
+    """
     if wf_results.empty:
         return {
             "n_periods": 0,
@@ -69,14 +100,19 @@ def summarize_walk_forward(wf_results):
             "se": np.nan,
             "t_stat": np.nan,
             "hit_rate": np.nan,
+            "mean_forward_excess_return_winsorized": np.nan,
+            "se_winsorized": np.nan,
+            "t_stat_winsorized": np.nan,
+            "winsorize_limit": WINSORIZE_LIMIT,
             "warning": "No rebalance periods had enough trailing history to evaluate.",
         }
     n = len(wf_results)
-    mean_ret = float(wf_results["portfolio_forward_excess_return"].mean())
-    se = (float(wf_results["portfolio_forward_excess_return"].std(ddof=1) / np.sqrt(n))
-          if n > 1 else np.nan)
+    returns = wf_results["portfolio_forward_excess_return"]
+    mean_ret = float(returns.mean())
+    se = float(returns.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan
     t_stat = mean_ret / se if se and se > 0 else np.nan
     hit_rate = float(wf_results["hit"].mean())
+    w_mean, w_se, w_t = _winsorized_mean_se_t(returns)
     warning = (
         f"Only {n} real historical rebalance period(s) available -- treat this as "
         f"exploratory, not a validated backtest, until more real history accumulates."
@@ -88,5 +124,9 @@ def summarize_walk_forward(wf_results):
         "se": se,
         "t_stat": t_stat,
         "hit_rate": hit_rate,
+        "mean_forward_excess_return_winsorized": w_mean,
+        "se_winsorized": w_se,
+        "t_stat_winsorized": w_t,
+        "winsorize_limit": WINSORIZE_LIMIT,
         "warning": warning,
     }
