@@ -36,6 +36,11 @@ def parse_args(argv=None):
     ap.add_argument("--holding-months", type=int, default=3)
     ap.add_argument("--rolling-windows", type=int, default=8)
     ap.add_argument("--top-n", type=int, default=20)
+    ap.add_argument("--weight-smoothing-periods", type=int,
+                    default=priorities.WEIGHT_SMOOTHING_PERIODS,
+                    help="Trailing rebalance periods averaged into each priority's ranking "
+                         "weight, instead of only the latest snapshot (damps single-quarter "
+                         "spikes, e.g. a momentum surge, from dominating portfolio weight)")
     ap.add_argument("--fundamental-lag-days", type=int, default=60,
                     help="Reporting lag: rebalance at t only sees fundamentals dated <= t - lag")
     ap.add_argument("--sector-neutral", action="store_true",
@@ -183,17 +188,21 @@ def main(argv=None):
 
     # 6. ranks (downstream of diagnosis)
     ranks, weights, latest_date = priorities.composite_stock_ranks(
-        panel, pscores, factors, top_n=args.top_n)
+        panel, pscores, factors, top_n=args.top_n,
+        weight_smoothing_periods=args.weight_smoothing_periods)
     ranks.to_csv(os.path.join(args.output, "latest_stock_ranks.csv"), index=False)
 
     # 6.5. walk-forward: would this ranking approach have worked historically?
     # Exploratory (docs/QUANT_METHODOLOGY.md's Required Additions) -- every
     # number here should be read with the sample-size caveat front and center.
-    wf_results = walkforward.walk_forward_evaluate(panel, pscores, factors, top_n=args.top_n)
+    wf_results = walkforward.walk_forward_evaluate(
+        panel, pscores, factors, top_n=args.top_n,
+        weight_smoothing_periods=args.weight_smoothing_periods)
     wf_results.to_csv(os.path.join(args.output, "walk_forward_results.csv"), index=False)
     wf_summary = walkforward.summarize_walk_forward(wf_results)
     print(f"[walk-forward] {wf_summary['n_periods']} historical rebalance(s) evaluated, "
-          f"mean forward excess return {wf_summary['mean_forward_excess_return']:.4f}, "
+          f"mean forward excess return {wf_summary['mean_forward_excess_return']:.4f} "
+          f"(winsorized {wf_summary['mean_forward_excess_return_winsorized']:.4f}), "
           f"hit rate {wf_summary['hit_rate']:.2f}"
           if wf_summary["n_periods"] else "[walk-forward] no evaluable historical periods")
     if wf_summary["warning"]:
@@ -224,6 +233,7 @@ def main(argv=None):
     config = {"rebalance": args.rebalance, "holding_months": args.holding_months,
               "rolling_windows": args.rolling_windows, "top_n": args.top_n,
               "fundamental_lag_days": args.fundamental_lag_days,
+              "weight_smoothing_periods": args.weight_smoothing_periods,
               "sector_neutral": args.sector_neutral, "fdr": args.fdr,
               "synthetic": args.synthetic, "synthetic_null": args.synthetic_null, "seed": args.seed}
     md = report.build_report(pscores, rolled, itests, ranks, weights, ov,

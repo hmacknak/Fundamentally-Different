@@ -72,13 +72,28 @@ def overlap_matrix(factors_present):
     return mat
 
 
-def composite_stock_ranks(panel, priority_scores, factors_present, top_n=20, as_of_date=None):
+WEIGHT_SMOOTHING_PERIODS = 4
+
+
+def composite_stock_ranks(panel, priority_scores, factors_present, top_n=20, as_of_date=None,
+                          weight_smoothing_periods=WEIGHT_SMOOTHING_PERIODS):
     """Rank stocks under the inferred priorities as of `as_of_date` (default:
     the latest date in `panel`).
 
-    Weights = positive part of that date's priority scores, normalized. A
-    stock's composite = weighted mean of its member-factor ranks per priority.
-    Downstream of diagnosis, by design.
+    Weights = positive part of the trailing mean of priority scores over the
+    last `weight_smoothing_periods` dates (default 4 quarters) up to and
+    including the ranking date, normalized. A stock's composite = weighted
+    mean of its member-factor ranks per priority. Downstream of diagnosis,
+    by design.
+
+    Weight smoothing (2026-07-11, see docs/DECISIONS.md): using only the
+    single latest snapshot let one hot quarter's IC -- e.g. a momentum-driven
+    spike in Growth scarcity -- dominate portfolio weight, which then
+    re-ranks even more heavily by trailing momentum next quarter
+    (a self-reinforcing "chasing" loop). Averaging over several trailing
+    quarters is standard practice for damping single-period noise in a
+    weighting scheme and only ever looks backward from the ranking date, so
+    it stays trailing-only / leakage-free like the rest of this module.
 
     Passing an explicit `as_of_date` supports walk-forward evaluation
     (amp/walkforward.py): ranking stocks using only the priority scores
@@ -91,12 +106,17 @@ def composite_stock_ranks(panel, priority_scores, factors_present, top_n=20, as_
     is_explicit = as_of_date is not None
     latest_date = as_of_date if is_explicit else panel["date"].max()
     latest_ps = priority_scores[priority_scores["date"] == latest_date]
+    weight_anchor_date = latest_date
     if latest_ps.empty:
         if is_explicit:
             return pd.DataFrame(), pd.Series(dtype=float), latest_date
-        latest_date_ps = priority_scores["date"].max()
-        latest_ps = priority_scores[priority_scores["date"] == latest_date_ps]
-    weights = latest_ps.set_index("priority")["priority_score"].clip(lower=0)
+        weight_anchor_date = priority_scores["date"].max()
+        latest_ps = priority_scores[priority_scores["date"] == weight_anchor_date]
+
+    trailing_dates = sorted(d for d in priority_scores["date"].unique() if d <= weight_anchor_date)
+    window_dates = trailing_dates[-weight_smoothing_periods:]
+    window_ps = priority_scores[priority_scores["date"].isin(window_dates)]
+    weights = window_ps.groupby("priority")["priority_score"].mean().clip(lower=0)
     if weights.sum() <= 0:
         weights = pd.Series(1.0, index=latest_ps["priority"])
     weights = weights / weights.sum()

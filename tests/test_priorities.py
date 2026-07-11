@@ -53,3 +53,32 @@ def test_composite_stock_ranks_orders_by_score_descending():
     ranks, weights, latest_date = composite_stock_ranks(panel, pscores, ["fcf_yield"], top_n=2)
     assert ranks.iloc[0]["ticker"] == "A"
     assert ranks.iloc[0]["rank"] == 1
+
+
+def test_composite_stock_ranks_weight_smoothing_damps_latest_quarter_spike():
+    dates = list(pd.to_datetime(
+        ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01"]))
+    panel = pd.DataFrame({
+        "date": [dates[-1]] * 2,
+        "ticker": ["A", "B"],
+        "fcf_yield_rank": [0.5, 0.5],
+        "momentum_6m_rank": [0.5, 0.5],
+    })
+    pscores = pd.DataFrame({
+        "date": dates + dates,
+        "priority": ["Cash generation"] * 4 + ["Growth scarcity"] * 4,
+        # Growth scarcity spikes only in the latest quarter (e.g. a momentum
+        # surge); Cash generation stays flat throughout.
+        "priority_score": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.9],
+    })
+    factors = ["fcf_yield", "momentum_6m"]
+
+    _, weights_smoothed, _ = composite_stock_ranks(
+        panel, pscores, factors, as_of_date=dates[-1])
+    _, weights_latest_only, _ = composite_stock_ranks(
+        panel, pscores, factors, as_of_date=dates[-1], weight_smoothing_periods=1)
+
+    # trailing-averaged weight is damped relative to a latest-snapshot-only weight
+    assert weights_smoothed["Growth scarcity"] < weights_latest_only["Growth scarcity"]
+    assert weights_smoothed["Growth scarcity"] == pytest.approx(0.75)
+    assert weights_latest_only["Growth scarcity"] == pytest.approx(0.9)

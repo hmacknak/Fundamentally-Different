@@ -161,6 +161,45 @@ without erroring but will reliably report "blocked" (empty database) rather
 than publish a live report — this is the data-quality gate working as
 designed, not a bug.
 
+## 2026-07-11 — Two conservative fixes for momentum "chasing" behavior
+- Context: after the first real S&P 500 walk-forward result (38 quarters,
+  +4.47%/qtr, t=2.43), the owner pushed on how much of that was momentum
+  chasing itself: `momentum_6m` is a member factor of the "Growth scarcity"
+  priority, and ranking weights were set from only the single latest
+  rebalance date's priority score. A hot momentum quarter mechanically
+  inflates Growth scarcity's IC that quarter, which raises its ranking
+  weight, which ranks even more heavily by trailing momentum next quarter —
+  a self-reinforcing loop, not necessarily a real signal. Excluding the 2
+  largest outlier quarters from the raw walk-forward sample dropped the mean
+  from +4.47%/qtr to +2.44%/qtr (t=1.98), confirming a small number of
+  periods were doing a lot of work.
+- Decision: shipped the two safest fixes of four considered, per the owner's
+  explicit go-ahead, and held off on the more invasive ones:
+  1. **Weight smoothing** (`amp/priorities.py`): priority ranking weights now
+     use a trailing 4-quarter average of `priority_score` instead of only
+     the latest date, configurable via `--weight-smoothing-periods`. See
+     docs/QUANT_METHODOLOGY.md for the full writeup.
+  2. **Winsorized walk-forward reporting** (`amp/walkforward.py`): the
+     walk-forward summary now reports a winsorized (5th/95th percentile
+     capped) mean/SE/t alongside the existing raw ones, so the report makes
+     outlier-driven results visible rather than hiding them behind one
+     number. Never replaces the raw stat.
+- Alternatives considered (deferred, not approved): (a) a turnover/
+  rank-persistence rule penalizing single-quarter rank churn, and (b)
+  decoupling momentum from the ranking weight entirely (e.g. giving it a
+  measurement-only role, not a weight-setting one). Both are real
+  methodology changes to the diagnosis itself, not just the weighting/
+  reporting layer, and were explicitly held back until the effect of these
+  two conservative fixes on real data is visible.
+- Consequences: this changes portfolio ranking *weights*, not factor
+  evidence, priority composition, or FDR control. Verified against synthetic
+  control tests (planted-signal recovery unaffected) before touching real
+  data; the number of rebalance dates evaluated is unchanged, only weight
+  computation and summary-stat reporting change.
+- Owner: engineering (per owner's explicit "Yes" approval); revisit items
+  (a)/(b) above once real-data walk-forward results with the smoothed
+  weights have accumulated a few more quarters.
+
 ## 2026-07-11 — Known defects found and fixed while stabilizing
 - `adaptive_market_priority_engine.py`: nested f-strings with matching
   quotes (Python 3.12+ only) broke `--synthetic-null` on the documented

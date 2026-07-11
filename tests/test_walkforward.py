@@ -100,3 +100,35 @@ def test_summarize_walk_forward_empty_input():
     summary = summarize_walk_forward(pd.DataFrame())
     assert summary["n_periods"] == 0
     assert np.isnan(summary["mean_forward_excess_return"])
+    assert np.isnan(summary["mean_forward_excess_return_winsorized"])
+
+
+def test_summarize_walk_forward_winsorized_dampens_single_outlier_quarter():
+    # 9 quarters of a steady +1% return, plus 1 outlier quarter of +50% --
+    # the outlier should move the raw mean far more than the winsorized one.
+    n = 10
+    returns = [0.01] * (n - 1) + [0.50]
+    wf = pd.DataFrame({
+        "date": pd.date_range("2015-01-01", periods=n, freq="QE"),
+        "n_holdings": [1] * n,
+        "portfolio_forward_excess_return": returns,
+        "hit": [True] * n,
+    })
+    summary = summarize_walk_forward(wf)
+    raw_gap = summary["mean_forward_excess_return"] - 0.01
+    winsorized_gap = summary["mean_forward_excess_return_winsorized"] - 0.01
+    assert winsorized_gap < raw_gap
+    # raw stats must remain untouched -- winsorizing is reported alongside, not instead of
+    assert summary["mean_forward_excess_return"] == pytest.approx(np.mean(returns))
+
+
+def test_summarize_walk_forward_winsorized_present_for_normal_sample():
+    wf = pd.DataFrame({
+        "date": pd.to_datetime(["2020-01-01", "2020-04-01"]),
+        "n_holdings": [1, 1],
+        "portfolio_forward_excess_return": [0.05, 0.03],
+        "hit": [True, True],
+    })
+    summary = summarize_walk_forward(wf)
+    assert not np.isnan(summary["mean_forward_excess_return_winsorized"])
+    assert summary["winsorize_limit"] == pytest.approx(0.05)
