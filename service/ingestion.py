@@ -57,13 +57,34 @@ def _hash_frame(df: pd.DataFrame) -> str:
     return hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values.tobytes()).hexdigest()
 
 
-def _upsert(session: Session, model, natural_key: dict, values: dict) -> None:
-    existing = session.query(model).filter_by(**natural_key).one_or_none()
-    if existing is None:
-        session.add(model(**{**natural_key, **values}))
+def _bulk_upsert(session: Session, model, rows: list[dict], index_elements: list[str],
+                 update_columns: list[str], chunk_size: int = 500) -> int:
+    """One INSERT ... ON CONFLICT DO UPDATE per chunk, instead of a
+    query-then-insert round trip per row. The per-row version was fine
+    against local SQLite in tests but made a full historical backfill against
+    a real remote database (network round trip per row) impractically slow —
+    caught on the first live ingestion run."""
+    if not rows:
+        return 0
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as insert_stmt
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as insert_stmt
     else:
-        for k, v in values.items():
-            setattr(existing, k, v)
+        raise NotImplementedError(f"bulk upsert not implemented for dialect {dialect!r}")
+
+    total = 0
+    for i in range(0, len(rows), chunk_size):
+        chunk = rows[i:i + chunk_size]
+        stmt = insert_stmt(model).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=index_elements,
+            set_={c: getattr(stmt.excluded, c) for c in update_columns},
+        )
+        session.execute(stmt)
+        total += len(chunk)
+    return total
 
 
 def _start_run(session: Session, domain: str, provider: str) -> str:
@@ -90,20 +111,20 @@ def ingest_prices(session: Session, prices: pd.DataFrame, provider: str) -> Inge
     payload_hash = _hash_frame(prices)
     warnings: list[str] = []
     try:
-        rows = 0
         now = dt.datetime.now(dt.timezone.utc)
-        for _, r in prices.iterrows():
-            _upsert(
-                session, PricesDaily,
-                {"ticker": r["ticker"], "date": pd.Timestamp(r["date"]).date()},
-                {"adj_close": float(r["adj_close"]),
-                 "volume": float(r["volume"]) if pd.notna(r.get("volume")) else None,
-                 "provider": provider, "retrieved_at": now, "raw_payload_hash": payload_hash},
-            )
-            rows += 1
+        rows = [
+            {"ticker": r["ticker"], "date": pd.Timestamp(r["date"]).date(),
+             "adj_close": float(r["adj_close"]),
+             "volume": float(r["volume"]) if pd.notna(r.get("volume")) else None,
+             "provider": provider, "retrieved_at": now, "raw_payload_hash": payload_hash}
+            for _, r in prices.iterrows()
+        ]
+        n = _bulk_upsert(session, PricesDaily, rows, index_elements=["ticker", "date"],
+                         update_columns=["adj_close", "volume", "provider", "retrieved_at",
+                                         "raw_payload_hash"])
         session.commit()
-        _finish_run(session, run_id, rows, warnings, "succeeded")
-        return IngestionResult(run_id, "prices", provider, rows, warnings, "succeeded")
+        _finish_run(session, run_id, n, warnings, "succeeded")
+        return IngestionResult(run_id, "prices", provider, n, warnings, "succeeded")
     except Exception as e:
         session.rollback()
         _finish_run(session, run_id, 0, warnings, "failed", str(e))
@@ -115,24 +136,24 @@ def ingest_macro(session: Session, macro: pd.DataFrame, provider: str) -> Ingest
     payload_hash = _hash_frame(macro)
     warnings: list[str] = []
     try:
-        rows = 0
         now = dt.datetime.now(dt.timezone.utc)
         series_cols = [c for c in macro.columns if c != "date"]
+        rows = []
         for _, r in macro.iterrows():
             obs_date = pd.Timestamp(r["date"]).date()
             for col in series_cols:
                 val = r[col]
                 if pd.isna(val):
                     continue
-                _upsert(
-                    session, MacroObservation,
-                    {"series_name": col, "observation_date": obs_date, "provider": provider},
-                    {"value": float(val), "retrieved_at": now, "raw_payload_hash": payload_hash},
-                )
-                rows += 1
+                rows.append({"series_name": col, "observation_date": obs_date,
+                            "provider": provider, "value": float(val),
+                            "retrieved_at": now, "raw_payload_hash": payload_hash})
+        n = _bulk_upsert(session, MacroObservation, rows,
+                         index_elements=["series_name", "observation_date", "provider"],
+                         update_columns=["value", "retrieved_at", "raw_payload_hash"])
         session.commit()
-        _finish_run(session, run_id, rows, warnings, "succeeded")
-        return IngestionResult(run_id, "macro", provider, rows, warnings, "succeeded")
+        _finish_run(session, run_id, n, warnings, "succeeded")
+        return IngestionResult(run_id, "macro", provider, n, warnings, "succeeded")
     except Exception as e:
         session.rollback()
         _finish_run(session, run_id, 0, warnings, "failed", str(e))
@@ -148,27 +169,27 @@ def ingest_fundamentals(session: Session, fundamentals: pd.DataFrame, provider: 
     payload_hash = _hash_frame(fundamentals)
     warnings: list[str] = []
     try:
-        rows = 0
         now = dt.datetime.now(dt.timezone.utc)
+        rows = []
         for _, r in fundamentals.iterrows():
             period_end = pd.Timestamp(r["date"]).date()
             availability = period_end + dt.timedelta(days=availability_lag_days)
-            values = {f: (float(r[f]) if f in r and pd.notna(r[f]) else None)
-                     for f in FUNDAMENTALS_FIELDS}
-            values.update({
+            row = {f: (float(r[f]) if f in r and pd.notna(r[f]) else None)
+                  for f in FUNDAMENTALS_FIELDS}
+            row.update({
+                "ticker": r["ticker"], "period_end_date": period_end, "provider": provider,
                 "availability_date": availability,
                 "sector": r["sector"] if "sector" in r and pd.notna(r.get("sector")) else None,
-                "provider": provider, "retrieved_at": now, "raw_payload_hash": payload_hash,
+                "retrieved_at": now, "raw_payload_hash": payload_hash,
             })
-            _upsert(
-                session, FundamentalsReported,
-                {"ticker": r["ticker"], "period_end_date": period_end, "provider": provider},
-                values,
-            )
-            rows += 1
+            rows.append(row)
+        n = _bulk_upsert(session, FundamentalsReported, rows,
+                         index_elements=["ticker", "period_end_date", "provider"],
+                         update_columns=[*FUNDAMENTALS_FIELDS, "availability_date", "sector",
+                                         "retrieved_at", "raw_payload_hash"])
         session.commit()
-        _finish_run(session, run_id, rows, warnings, "succeeded")
-        return IngestionResult(run_id, "fundamentals", provider, rows, warnings, "succeeded")
+        _finish_run(session, run_id, n, warnings, "succeeded")
+        return IngestionResult(run_id, "fundamentals", provider, n, warnings, "succeeded")
     except Exception as e:
         session.rollback()
         _finish_run(session, run_id, 0, warnings, "failed", str(e))
