@@ -101,6 +101,7 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
     import urllib.request
     base = "https://financialmodelingprep.com/api/v3"
     rows = []
+    errors = []
     for tk in tickers:
         try:
             km = json.load(urllib.request.urlopen(
@@ -109,11 +110,20 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
                 f"{base}/ratios/{tk}?period={period}&limit={limit}&apikey={api_key}", timeout=30))
         except Exception as e:
             print(f"  skip {tk}: {e}", file=sys.stderr)
+            errors.append(str(e))
             continue
         ra_by_date = {r["date"]: r for r in ra}
         for k in km:
             rows.append(map_fmp_period_to_fundamentals_row(tk, k, ra_by_date.get(k["date"], {})))
         time.sleep(0.3)
+    if not rows:
+        sample = errors[0] if errors else "no tickers requested"
+        raise RuntimeError(
+            f"FMP returned no usable data for any of {len(tickers)} ticker(s) "
+            f"(sample error: {sample}). Check that FMP_API_KEY is valid and that your "
+            f"FMP plan includes the key-metrics and ratios endpoints — a 403 typically "
+            f"means the key or plan doesn't have access to these endpoints."
+        )
     f = pd.DataFrame(rows)
     f["date"] = pd.to_datetime(f["date"])
     f = compute_revenue_growth_yoy_per_share(f)

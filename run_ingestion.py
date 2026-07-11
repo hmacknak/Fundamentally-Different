@@ -36,6 +36,7 @@ def main(argv=None) -> int:
     universe = load_universe(args.universe_file)
     end = str(dt.date.today())
 
+    fundamentals_failed = False
     with session_factory() as session:
         prices = data_adapters.build_prices_csv(universe, start=args.start, end=end,
                                                 out_path="/tmp/_prices_ingest.csv")
@@ -54,12 +55,19 @@ def main(argv=None) -> int:
                  "(~US$20-30/mo) that needs an account — see docs/DECISIONS.md for how "
                  "to enable it once you're ready.", file=sys.stderr)
         else:
-            fundamentals = data_adapters.build_fundamentals_csv(
-                universe, api_key=config.fmp_api_key, out_path="/tmp/_fundamentals_ingest.csv")
-            r_fund = ingest_fundamentals(session, fundamentals, provider="fmp")
-            print(f"[fundamentals] {r_fund.status}: {r_fund.rows_ingested} rows")
+            # Fetched separately from prices/macro so a provider outage or plan/key
+            # problem on FMP's side doesn't discard prices/macro data already
+            # committed above, or hide behind an unrelated traceback.
+            try:
+                fundamentals = data_adapters.build_fundamentals_csv(
+                    universe, api_key=config.fmp_api_key, out_path="/tmp/_fundamentals_ingest.csv")
+                r_fund = ingest_fundamentals(session, fundamentals, provider="fmp")
+                print(f"[fundamentals] {r_fund.status}: {r_fund.rows_ingested} rows")
+            except Exception as e:
+                print(f"[fundamentals] failed: {e}", file=sys.stderr)
+                fundamentals_failed = True
 
-    return 0
+    return 1 if fundamentals_failed else 0
 
 
 if __name__ == "__main__":
