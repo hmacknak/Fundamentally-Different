@@ -72,16 +72,28 @@ def overlap_matrix(factors_present):
     return mat
 
 
-def composite_stock_ranks(panel, priority_scores, factors_present, top_n=20):
-    """Rank stocks under the latest inferred priorities.
+def composite_stock_ranks(panel, priority_scores, factors_present, top_n=20, as_of_date=None):
+    """Rank stocks under the inferred priorities as of `as_of_date` (default:
+    the latest date in `panel`).
 
-    Weights = positive part of latest priority scores, normalized. A stock's
-    composite = weighted mean of its member-factor ranks per priority.
+    Weights = positive part of that date's priority scores, normalized. A
+    stock's composite = weighted mean of its member-factor ranks per priority.
     Downstream of diagnosis, by design.
+
+    Passing an explicit `as_of_date` supports walk-forward evaluation
+    (amp/walkforward.py): ranking stocks using only the priority scores
+    available at that historical date. Unlike the default (latest) path,
+    an explicit date that has no matching priority_scores row returns empty
+    rather than falling back to priority_scores' own max date -- silently
+    substituting a *different* date here would leak future information into
+    a historical evaluation.
     """
-    latest_date = panel["date"].max()
+    is_explicit = as_of_date is not None
+    latest_date = as_of_date if is_explicit else panel["date"].max()
     latest_ps = priority_scores[priority_scores["date"] == latest_date]
     if latest_ps.empty:
+        if is_explicit:
+            return pd.DataFrame(), pd.Series(dtype=float), latest_date
         latest_date_ps = priority_scores["date"].max()
         latest_ps = priority_scores[priority_scores["date"] == latest_date_ps]
     weights = latest_ps.set_index("priority")["priority_score"].clip(lower=0)

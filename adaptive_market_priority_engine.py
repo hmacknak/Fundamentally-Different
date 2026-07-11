@@ -23,7 +23,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from amp import features, interactions, priorities, report, scoring, synth, validation
+from amp import features, interactions, priorities, report, scoring, synth, validation, walkforward
 
 
 def parse_args(argv=None):
@@ -186,6 +186,19 @@ def main(argv=None):
         panel, pscores, factors, top_n=args.top_n)
     ranks.to_csv(os.path.join(args.output, "latest_stock_ranks.csv"), index=False)
 
+    # 6.5. walk-forward: would this ranking approach have worked historically?
+    # Exploratory (docs/QUANT_METHODOLOGY.md's Required Additions) -- every
+    # number here should be read with the sample-size caveat front and center.
+    wf_results = walkforward.walk_forward_evaluate(panel, pscores, factors, top_n=args.top_n)
+    wf_results.to_csv(os.path.join(args.output, "walk_forward_results.csv"), index=False)
+    wf_summary = walkforward.summarize_walk_forward(wf_results)
+    print(f"[walk-forward] {wf_summary['n_periods']} historical rebalance(s) evaluated, "
+          f"mean forward excess return {wf_summary['mean_forward_excess_return']:.4f}, "
+          f"hit rate {wf_summary['hit_rate']:.2f}"
+          if wf_summary["n_periods"] else "[walk-forward] no evaluable historical periods")
+    if wf_summary["warning"]:
+        print(f"[walk-forward] WARNING: {wf_summary['warning']}")
+
     # 7. control-test validation on synthetic runs
     synth_val = None
     if args.synthetic_null:
@@ -214,7 +227,8 @@ def main(argv=None):
               "sector_neutral": args.sector_neutral, "fdr": args.fdr,
               "synthetic": args.synthetic, "synthetic_null": args.synthetic_null, "seed": args.seed}
     md = report.build_report(pscores, rolled, itests, ranks, weights, ov,
-                             latest_date, audit, config, synth_validation=synth_val)
+                             latest_date, audit, config, synth_validation=synth_val,
+                             walk_forward_summary=wf_summary)
     with open(os.path.join(args.output, "market_priority_report.md"), "w") as fh:
         fh.write(md)
 

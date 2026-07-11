@@ -28,6 +28,7 @@ def main(argv=None) -> int:
 
     itests_path = os.path.join(args.output, "interaction_tests.csv")
     fscores_path = os.path.join(args.output, "factor_scores.csv")
+    wf_path = os.path.join(args.output, "walk_forward_results.csv")
 
     if os.path.exists(itests_path):
         try:
@@ -52,6 +53,18 @@ def main(argv=None) -> int:
         cols = ["factor", "rolling_ic", "rolling_ic_se", "rolling_ic_t", "hit_rate",
                 "strengthening_4p"]
         print(latest.sort_values("abs_t", ascending=False)[cols].to_string(index=False))
+
+    if os.path.exists(wf_path):
+        try:
+            wf = pd.read_csv(wf_path)
+        except pd.errors.EmptyDataError:
+            wf = pd.DataFrame()
+        print("\n=== Walk-forward: realized forward excess return per historical rebalance ===")
+        print("Exploratory -- no transaction costs modeled, and few real periods exist so far.\n")
+        if wf.empty:
+            print("(no rebalance dates had enough trailing history to evaluate)")
+        else:
+            print(wf.to_string(index=False))
 
     return 0
 

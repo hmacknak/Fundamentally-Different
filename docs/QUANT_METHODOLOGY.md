@@ -22,7 +22,13 @@
 - Quantitative trend magnitude, not only labels
 - Change tables versus prior rebalance
 - Sensitivity runs for window length, lag, and rebalance frequency
-- Walk-forward out-of-sample evaluation
+- ~~Walk-forward out-of-sample evaluation~~ — done: `amp/walkforward.py`
+  ranks stocks at each historical rebalance date using only that date's
+  (already trailing-only) priority scores, then measures realized forward
+  excess return. Reported in `market_priority_report.md` and
+  `walk_forward_results.csv` with an explicit small-sample warning below
+  20 periods. Turnover/costs (next item) are still not modeled, so read
+  these numbers as a directional check, not a strategy return estimate.
 - Turnover and transaction-cost analysis before any strategy claims
 
 ## Interpretation rule
