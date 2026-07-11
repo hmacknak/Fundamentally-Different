@@ -28,6 +28,9 @@ def main(argv=None) -> int:
     ap.add_argument("--start", default="2015-01-01")
     ap.add_argument("--skip-fundamentals", action="store_true",
                     help="Fetch prices/macro only; skip the paid FMP call")
+    ap.add_argument("--fundamentals-period", default="quarter", choices=["quarter", "annual"],
+                    help="Some FMP plan tiers only entitle annual-frequency fundamentals; "
+                         "switch to 'annual' if quarterly requests get HTTP 402")
     args = ap.parse_args(argv)
 
     config = AppConfig.from_env()
@@ -60,7 +63,8 @@ def main(argv=None) -> int:
             # committed above, or hide behind an unrelated traceback.
             try:
                 fundamentals = data_adapters.build_fundamentals_csv(
-                    universe, api_key=config.fmp_api_key, out_path="/tmp/_fundamentals_ingest.csv")
+                    universe, api_key=config.fmp_api_key, out_path="/tmp/_fundamentals_ingest.csv",
+                    period=args.fundamentals_period)
                 r_fund = ingest_fundamentals(session, fundamentals, provider="fmp")
                 print(f"[fundamentals] {r_fund.status}: {r_fund.rows_ingested} rows")
             except Exception as e:
