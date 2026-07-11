@@ -52,8 +52,30 @@ Optional: `--sector-neutral` (rank factors within sector), `--fdr 0.10`,
   wti_oil, vix, credit_spread, cadusd, gold
 
 `data_adapters.py` builds all three from live sources (yfinance + FRED free;
-FMP for fundamentals, paid). Written offline and not yet live-tested — expect
-minor field-name fixes on first run.
+FMP for fundamentals, paid). The vendor-mapping logic (service/providers/)
+is unit tested against canned responses, but the live network calls
+themselves haven't been exercised against the real APIs yet — expect minor
+field-name fixes on first live run.
+
+## Automated pipeline (Phase 1)
+
+For the "run without touching code" MVP described in docs/PRD.md:
+
+```bash
+pip install -r requirements.txt
+python -m pytest                 # 73 tests: math, DB schema, ingestion, orchestrator
+python run_ingestion.py           # fetch live prices/macro (+ fundamentals if FMP_API_KEY is set)
+python run_report.py              # gate-checked engine run -> report, or a clear "blocked" reason
+```
+
+`run_report.py` never publishes from stale or thin data — see
+`service/ingestion.check_data_quality_gate` and docs/VALIDATION_PLAN.md's
+publication gate. Configuration is env-based (`service/config.py`,
+`config/example.env`); `.github/workflows/ingest.yml` and
+`publish-report.yml` scaffold the daily/quarterly schedule from
+docs/AUTOMATION_AND_DEPLOYMENT.md but need `DATABASE_URL` and
+`FMP_API_KEY` added as repo secrets before they do anything beyond a dry
+run — see docs/DECISIONS.md, "Open items requiring the owner."
 
 ## Outputs (per run, in --output)
 
