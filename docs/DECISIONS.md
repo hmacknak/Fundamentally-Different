@@ -89,9 +89,8 @@ Initial decisions:
 - Context: docs/PRD.md specifies "configurable U.S. large-cap list, initially
   50-100 names" and CLAUDE.md rule 7 says the owner must not need to edit
   configuration.
-- Decision: service/universe.py ships a hard-coded 61-ticker large-cap list
-  spanning tech/financials/healthcare/consumer/industrials/communications, so
-  the system runs out of the box. A developer can override it via
+- Decision: service/universe.py ships a hard-coded large-cap list so the
+  system runs out of the box. A developer can override it via
   --universe-file; the non-technical owner never needs to.
 - Alternatives considered: requiring the owner to supply a universe on first
   run. Rejected — violates the "no recurring technical work" product
@@ -101,6 +100,32 @@ Initial decisions:
   only); expanding/rotating the universe is a code change, not a methodology
   change.
 - Owner: engineering; revisit if the owner wants a different starting universe.
+
+## 2026-07-11 — Expanded default universe from 61 names to the full S&P 500
+- Context: after the first successful real report (61 tickers), the owner
+  asked to expand coverage to get more cross-sectional statistical power —
+  more tickers per rebalance date, not a methodology change.
+- Decision: replaced the hand-curated 61-ticker list with all 503 current
+  S&P 500 constituents, sourced from the "datasets/s-and-p-500-companies"
+  community-maintained GitHub dataset (this environment couldn't fetch
+  Wikipedia's source list directly — 403s from its bot protection).
+- Verification: spot-checked tickers against known symbols before shipping.
+  Found and corrected one transcription error in the source dataset (Marsh
+  & McLennan listed as "MRSH"; corrected to "MMC", its real ticker). Also
+  confirmed several unfamiliar-looking entries are genuine recent (2025-2026)
+  corporate actions, not errors: FDXF (FedEx Freight spinoff), HONA
+  (Honeywell Aerospace, post 3-way split), Q (DuPont's Qnity Electronics
+  spinoff). Not exhaustively re-verified beyond that spot check.
+- Consequences: ~350 API calls/day of headroom matters more now — FMP
+  Starter's rate limit is 300 calls/minute, and full-universe ingestion now
+  makes ~1,006 FMP calls (503 tickers x 2 endpoints) per run, so this is
+  comfortably within the per-minute limit but worth watching if a daily cap
+  applies. Any ticker this list gets wrong simply gets skipped by the
+  provider fetch (already-existing per-ticker error handling), not a crash —
+  so residual errors degrade coverage slightly rather than break the run.
+- Owner: engineering; re-verify the ticker list periodically as constituents
+  change (this is exactly the survivorship-membership problem already
+  flagged as a Phase 2 item).
 
 ## 2026-07-11 — Open items requiring the owner
 None of these block the code already written — everything above is tested
