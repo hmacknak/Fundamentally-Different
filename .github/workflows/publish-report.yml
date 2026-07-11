@@ -31,6 +31,19 @@ jobs:
       - run: python run_report.py --output output
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Print report to job log (no artifact download needed to read it)
+        if: always()
+        run: |
+          if [ -f output/market_priority_report.md ]; then
+            echo "::group::market_priority_report.md"
+            cat output/market_priority_report.md
+            echo "::endgroup::"
+          fi
+          if [ -f output/data_quality_failure.md ]; then
+            echo "::group::data_quality_failure.md"
+            cat output/data_quality_failure.md
+            echo "::endgroup::"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
