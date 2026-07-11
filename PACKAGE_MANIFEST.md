@@ -38,7 +38,7 @@
 - `service/ingestion.py` — loads provider data into the DB with lineage;
   the data-quality publication gate
 - `service/orchestrator.py` — ties gate -> engine -> DB persistence -> report
-- `service/universe.py` — default 61-ticker MVP universe
+- `service/universe.py` — default universe (full S&P 500, 503 tickers)
 - `run_ingestion.py`, `run_report.py` — the two CLI entrypoints
 - `.github/workflows/ingest.yml`, `publish-report.yml` — scheduling scaffold
   (inert until `DATABASE_URL`/`FMP_API_KEY` secrets are added; see
