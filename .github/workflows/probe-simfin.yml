@@ -67,16 +67,41 @@ jobs:
                     "checking a current SimFin API key dashboard/docs page "
                     "logged in as the account owner before further engineering.")
           else:
-              print(f"=== RESULT: {len(working)} candidate(s) authenticated. "
-                    f"Probing statement history depth next. ===")
-              label, base_url, headers = working[0]
-              tickers = ["AAPL", "MSFT", "XOM", "JPM", "PG"]
-              for tk in tickers:
-                  for path in [
-                      f"/statements?ticker={tk}&statement=pl&period=quarterly&fyear-start=2000&fyear-end=2026",
-                      f"/companies/statements?ticker={tk}&statement=pl&period=quarterly",
-                  ]:
-                      url = base_url.rsplit("/", 1)[0] + path
-                      status, body = try_get(url, headers)
-                      print(f"--- {tk} {path} ---\nstatus={status}\n{body}\n")
+              print(f"=== RESULT: {len(working)} candidate(s) authenticated. ===")
+              _, list_url, headers = working[0]
+              root = "https://backend.simfin.com/api/v3"
+
+              print("\n=== Step 2: look up a company ID by ticker ===")
+              company_id = None
+              for path in [
+                  f"{root}/companies/general/compact?ticker=AAPL",
+                  f"{root}/companies/general?ticker=AAPL",
+                  f"{root}/companies/id/find?ticker=AAPL",
+              ]:
+                  status, body = try_get(path, headers)
+                  print(f"--- {path} ---\nstatus={status}\n{body}\n")
+                  if status == 200:
+                      try:
+                          data = json.loads(body if body.strip().startswith(("{", "[")) else "{}")
+                          if isinstance(data, list) and data:
+                              company_id = data[0].get("id") or data[0].get("simId")
+                          elif isinstance(data, dict):
+                              company_id = data.get("id") or data.get("simId")
+                      except Exception:
+                          pass
+
+              print(f"\n=== Step 3: statement endpoints (resolved company_id={company_id}) ===")
+              candidates2 = [
+                  f"{root}/companies/statements/compact?ticker=AAPL&statements=PL&period=Q1,Q2,Q3,Q4,FY&fyear=2005-2026",
+                  f"{root}/companies/statements/compact?ticker=AAPL&statements=pl&period=quarterly",
+                  f"{root}/companies/statements?ticker=AAPL&statements=PL",
+              ]
+              if company_id:
+                  candidates2.append(
+                      f"{root}/companies/id/{company_id}/statements/standardised"
+                      f"?statements=PL&period=Q1,Q2,Q3,Q4,FY&fyear=2005-2026")
+                  candidates2.append(f"{root}/companies/id/{company_id}")
+              for path in candidates2:
+                  status, body = try_get(path, headers)
+                  print(f"--- {path} ---\nstatus={status}\n{body}\n")
           PYEOF
