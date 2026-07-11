@@ -4,6 +4,15 @@ critical, and only non-free, feed this project uses).
 Mapping is a pure function so it is unit-testable with canned key-metrics
 and ratios JSON — no network access, and no API key, needed in CI.
 
+data_adapters.py calls FMP's "stable" endpoints (migrated from legacy
+/api/v3 — see docs/DECISIONS.md). Field names below (freeCashFlowYield,
+debtToEquity, etc.) were carried over from the legacy response shape;
+they were not independently re-verified against a live "stable" response,
+so if a real ingestion run comes back with a field unexpectedly all-None,
+check that field's name first against FMP's current docs before assuming
+something else is wrong — missing/renamed fields degrade to None here
+rather than crash, by design.
+
 `shares_dilution` is intentionally left unset: FMP's key-metrics/ratios
 endpoints used here don't carry a shares-outstanding history, so there is
 nothing honest to derive it from (CLAUDE.md rule: never fabricate a data
