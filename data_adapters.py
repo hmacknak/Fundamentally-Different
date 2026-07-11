@@ -128,9 +128,10 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
         sample = errors[0] if errors else "no tickers requested"
         raise RuntimeError(
             f"FMP returned no usable data for any of {len(tickers)} ticker(s) "
-            f"(sample error: {sample}). Check that FMP_API_KEY is valid and that your "
-            f"FMP plan includes the key-metrics and ratios endpoints — a 403 typically "
-            f"means the key or plan doesn't have access to these endpoints."
+            f"(sample error: {sample}). A 403 usually means the key or plan doesn't have "
+            f"access to these endpoints at all. A 402 usually means the plan has access but "
+            f"not at this frequency — some tiers only entitle annual-frequency fundamentals; "
+            f"retry with period='annual' before assuming a higher plan is required."
         )
     f = pd.DataFrame(rows)
     f["date"] = pd.to_datetime(f["date"])
