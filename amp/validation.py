@@ -3,10 +3,8 @@
 Audit-trail mindset: every input gets a quality report before it touches the model.
 """
 import hashlib
-import json
 import os
 
-import numpy as np
 import pandas as pd
 
 REQUIRED = {

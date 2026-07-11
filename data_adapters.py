@@ -103,7 +103,8 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
     reporting delay; consider FMP's 'fillingDate' field to set the lag
     precisely per row (future improvement: use fillingDate as the panel's
     as-of key instead of period-end + fixed lag)."""
-    import urllib.request, json
+    import urllib.request
+    import json
     base = "https://financialmodelingprep.com/api/v3"
     rows = []
     for tk in tickers:

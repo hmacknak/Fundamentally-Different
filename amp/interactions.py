@@ -14,7 +14,6 @@ identified within a date. The honest two-stage estimate:
 All (factor, macro) pairs are tested jointly and corrected with
 Benjamini-Hochberg FDR. The narrative layer may only speak about survivors.
 """
-import numpy as np
 import pandas as pd
 
 from .stats_utils import bh_fdr, ols_with_tstats

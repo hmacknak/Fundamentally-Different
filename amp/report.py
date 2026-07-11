@@ -5,7 +5,6 @@ Language rules enforced here:
 - Every claim carries its statistic (score, t, q, n).
 - Hedged verbs only: 'appears', 'is consistent with', 'evidence suggests'.
 """
-import numpy as np
 import pandas as pd
 
 MECHANISM_HINTS = {

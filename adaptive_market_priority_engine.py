@@ -64,7 +64,7 @@ def rebalance_dates_from_prices(px, freq, holding_days):
 def synth_validation_summary(rolled, interactions_df, gt_path, panel=None):
     """Compare recovered evidence against planted ground truth."""
     with open(gt_path) as fh:
-        gt = json.load(fh)
+        json.load(fh)  # fail loudly if the ground-truth file is missing/corrupt
     lines = []
     last = rolled[rolled["date"] == rolled["date"].max()].set_index("factor")
 
