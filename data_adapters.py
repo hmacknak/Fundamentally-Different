@@ -91,23 +91,31 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
                            period="quarter", limit=40):
     """FMP quarterly fundamentals mapped to the engine schema.
 
-    Uses /key-metrics and /ratios. NOTE: verify against FMP's as-reported
-    statement endpoints for anything material — key-metrics can reflect
-    restatements. The engine's --fundamental-lag-days then handles the
-    reporting delay; consider FMP's 'fillingDate' field to set the lag
-    precisely per row (future improvement: use fillingDate as the panel's
-    as-of key instead of period-end + fixed lag)."""
+    Uses FMP's "stable" /key-metrics and /ratios endpoints (ticker passed as
+    a query parameter, e.g. /stable/key-metrics?symbol=AAPL). The older
+    /api/v3/key-metrics/{ticker} path-parameter form is legacy and returns
+    403 for accounts created after FMP's August 2025 cutover — caught on a
+    live run against a real (post-cutover) FMP account.
+
+    NOTE: verify against FMP's as-reported statement endpoints for anything
+    material — key-metrics can reflect restatements. The engine's
+    --fundamental-lag-days then handles the reporting delay; consider FMP's
+    'fillingDate' field to set the lag precisely per row (future
+    improvement: use fillingDate as the panel's as-of key instead of
+    period-end + fixed lag)."""
     import json
     import urllib.request
-    base = "https://financialmodelingprep.com/api/v3"
+    base = "https://financialmodelingprep.com/stable"
     rows = []
     errors = []
     for tk in tickers:
         try:
             km = json.load(urllib.request.urlopen(
-                f"{base}/key-metrics/{tk}?period={period}&limit={limit}&apikey={api_key}", timeout=30))
+                f"{base}/key-metrics?symbol={tk}&period={period}&limit={limit}&apikey={api_key}",
+                timeout=30))
             ra = json.load(urllib.request.urlopen(
-                f"{base}/ratios/{tk}?period={period}&limit={limit}&apikey={api_key}", timeout=30))
+                f"{base}/ratios?symbol={tk}&period={period}&limit={limit}&apikey={api_key}",
+                timeout=30))
         except Exception as e:
             print(f"  skip {tk}: {e}", file=sys.stderr)
             errors.append(str(e))
