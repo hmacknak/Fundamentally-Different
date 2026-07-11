@@ -44,6 +44,12 @@ jobs:
             cat output/data_quality_failure.md
             echo "::endgroup::"
           fi
+      - name: Print full factor x macro diagnostics (including non-FDR-surviving pairs)
+        if: always()
+        run: |
+          echo "::group::full diagnostics (unfiltered by FDR)"
+          python print_diagnostics.py --output output
+          echo "::endgroup::"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
