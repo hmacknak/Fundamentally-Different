@@ -31,6 +31,36 @@
   these numbers as a directional check, not a strategy return estimate.
 - Turnover and transaction-cost analysis before any strategy claims
 
+## Diagnostics (measurement only — no ranking/weighting behavior change)
+
+### 2026-07-11 — Factor payoff persistence check (`amp/persistence.py`)
+- What it is: tests, per factor, whether the raw per-date realized payoff
+  (`ic` from `scoring.score_factors_by_date`) is autocorrelated at lag 1
+  and lag 4 rebalance periods (an AR(lag) coefficient via
+  `stats_utils.ols_with_tstats`), FDR-corrected jointly across all
+  (factor, lag) tests like every other multi-test family in this project.
+  Deliberately tests the raw `ic` series, not the rolling-smoothed
+  `rolling_ic` — a rolling window's overlapping observations are
+  mechanically autocorrelated regardless of any true persistence, so
+  testing it would only measure the smoothing window, not the factor.
+- Why it exists: priority ranking weights (`priorities.py`) are set from
+  the trailing average of `rolling_ic` — i.e. from realized past payoff.
+  That design implicitly assumes factor payoffs persist quarter to
+  quarter. This assumption had never been directly tested; it had only
+  ever been acted on. This diagnostic tests it.
+- What it does NOT do: it does not change `composite_stock_ranks`'
+  weighting formula, FDR gating of the interaction layer, or any ranking
+  behavior. It is reported in `market_priority_report.md` (a new
+  "Factor payoff persistence check" section, shown for every factor, not
+  filtered to survivors, since the point is the full picture of the
+  methodology's own assumption) and in `factor_persistence.csv`.
+- Next step (pending, not yet built): if a factor is found to
+  mean-revert rather than persist, weighting its priority contribution by
+  trailing-average payoff is actively counter-productive for that factor,
+  not merely noisy. See docs/DECISIONS.md's 2026-07-11 "regime-conditional
+  shrinkage" entry for the planned follow-up, which is intentionally
+  gated on this diagnostic's result rather than designed in advance of it.
+
 ## Methodology changes (documented per CLAUDE.md rule 1)
 
 ### 2026-07-11 — Priority ranking weights now trailing-averaged, not latest-snapshot-only

@@ -200,6 +200,56 @@ designed, not a bug.
   (a)/(b) above once real-data walk-forward results with the smoothed
   weights have accumulated a few more quarters.
 
+## 2026-07-11 — Reactive-vs-predictive architecture review; persistence diagnostic shipped first
+- Context: the owner challenged the core architecture directly: AMPE ranks
+  stocks by which characteristics the market *has recently rewarded*
+  (trailing-average payoff), which is economically reactive, not
+  predictive — the Nvidia/Growth-scarcity example (an already-800%-up stock
+  getting ranked highly because momentum recently paid off) illustrates the
+  concern precisely. The owner proposed forecasting the macro path 3-12
+  months out and ranking on that forecast instead, and asked for a rigorous,
+  skeptical evaluation before any code changed.
+- Finding: the criticism of the *current* architecture is correct — ranking
+  weights are set from realized past payoff applied to today's exposures,
+  a momentum-in-factor-returns rule, and last session's smoothing fix
+  reduced its variance, not its direction. But the proposed cure (forecast
+  macro variables) is very likely a *worse* problem: macro forecasting at
+  this horizon is one of the least reliable prediction tasks in finance,
+  and would add a second, noisier estimation layer with a much larger
+  hindsight-bias surface than the existing FDR-gated factor evidence.
+  Critically, `amp/interactions.py` already estimates a genuinely
+  forward-conditional quantity — a factor's expected payoff conditional on
+  *today's already-known* macro state (no forecasting needed) — but that
+  estimate is never fed into `priorities.py`'s ranking weights, which use
+  only the unconditional trailing average. The real fix is reconnecting
+  evidence the project already validates, not building a macro forecaster.
+- Decision: reject macro-path forecasting. Plan a regime-conditional,
+  shrinkage-blended weighting scheme instead (blend the existing trailing
+  average with the FDR-surviving conditional payoff estimate evaluated at
+  today's macro state, shrunk toward the trailing average based on how much
+  history supports the conditional estimate). Before designing that blend,
+  ship a diagnostic that should have gated last session's smoothing fix:
+  does a factor's realized payoff actually persist quarter to quarter
+  (`amp/persistence.py`, lag-1/lag-4 autocorrelation of the raw per-date
+  `ic`, FDR-corrected jointly across factors and lags)? If it mean-reverts
+  instead, trailing-average weighting is wrong in *direction*, not just
+  noisy — a materially different and more urgent finding than anything
+  addressed so far.
+- Alternatives considered: designing the shrinkage weighting immediately
+  (deferred — would repeat the "assume, don't test" pattern this review is
+  critiquing); a valuation-spread-based forward signal a la factor-timing
+  literature (noted as a possible future complement, not pursued now — adds
+  complexity before the simpler, already-available fix is even tried).
+- Consequences: this entry documents a diagnostic only
+  (`amp/persistence.py`, reported in `market_priority_report.md` and
+  `factor_persistence.csv`) — no ranking or weighting behavior changed.
+  The regime-conditional shrinkage weighting itself is not yet built; it is
+  explicitly gated on this diagnostic's real-data result, per the owner's
+  "do what you think" on sequencing.
+- Owner: engineering; the shrinkage-weighting design (next phase) should
+  be reviewed with the owner before it changes real ranking behavior, per
+  CLAUDE.md rule 1.
+
 ## 2026-07-11 — Known defects found and fixed while stabilizing
 - `adaptive_market_priority_engine.py`: nested f-strings with matching
   quotes (Python 3.12+ only) broke `--synthetic-null` on the documented

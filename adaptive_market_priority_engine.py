@@ -23,7 +23,10 @@ import time
 import numpy as np
 import pandas as pd
 
-from amp import features, interactions, priorities, report, scoring, synth, validation, walkforward
+from amp import (
+    features, interactions, persistence, priorities, report, scoring, synth,
+    validation, walkforward,
+)
 
 
 def parse_args(argv=None):
@@ -173,6 +176,21 @@ def main(argv=None):
     rolled = scoring.add_rolling_stats(fscores, args.rolling_windows)
     rolled.to_csv(os.path.join(args.output, "factor_scores.csv"), index=False)
 
+    # 3.5. persistence diagnostic (exploratory): does a factor's raw per-date
+    # payoff persist quarter to quarter (justifying trailing-average
+    # weighting, as priorities.py currently does) or mean-revert (which would
+    # make that weighting actively harmful)? Diagnostic only -- does not
+    # change ranking or weighting behavior.
+    persist = persistence.factor_payoff_persistence(fscores, fdr_threshold=args.fdr)
+    persist.to_csv(os.path.join(args.output, "factor_persistence.csv"), index=False)
+    n_persist_sig = int(persist["significant_fdr"].sum()) if len(persist) else 0
+    print(f"[persistence] {len(persist)} factor x lag test(s), "
+          f"{n_persist_sig} distinguishable from noise after FDR")
+    if len(persist):
+        for _, r in persist[persist["significant_fdr"]].iterrows():
+            print(f"[persistence] {r['factor']} @ lag {r['lag']}: {r['classification']} "
+                  f"(beta={r['beta']:.3f}, t={r['t_stat']:.2f}, q={r['q_value']:.3f})")
+
     # 4. priorities
     pscores = priorities.score_priorities(rolled, factors)
     pscores.to_csv(os.path.join(args.output, "priority_scores.csv"), index=False)
@@ -238,7 +256,7 @@ def main(argv=None):
               "synthetic": args.synthetic, "synthetic_null": args.synthetic_null, "seed": args.seed}
     md = report.build_report(pscores, rolled, itests, ranks, weights, ov,
                              latest_date, audit, config, synth_validation=synth_val,
-                             walk_forward_summary=wf_summary)
+                             walk_forward_summary=wf_summary, persistence_results=persist)
     with open(os.path.join(args.output, "market_priority_report.md"), "w") as fh:
         fh.write(md)
 
