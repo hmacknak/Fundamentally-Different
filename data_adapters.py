@@ -7,20 +7,30 @@ real run. Run each builder once, eyeball the CSV, then feed the engine.
 
 Sources (free unless noted):
   prices        yfinance (survivorship caveat: today's tickers only)
-  macro         FRED public CSV endpoints + yfinance for VIX/benchmark/gold/CAD
+  macro         FRED public CSV endpoint (no API key) + yfinance for
+                VIX/benchmark/gold/CAD
   fundamentals  FMP (paid, ~US$20-30/mo) — the point-in-time-critical feed.
                 Prefer FMP's as-reported endpoints over key-metrics where
                 possible; restated data quietly poisons backtests.
 
 Point-in-time discipline stays in the ENGINE (--fundamental-lag-days). The
 adapter's job is only honest field mapping; it must never fabricate values.
+
+Schema-mapping logic lives in service/providers/ as pure, unit-tested
+functions; this module wires them to the live network calls.
 """
-import io
 import sys
 import time
 from datetime import date
 
 import pandas as pd
+
+from service.providers.fred import fetch_fred_series
+from service.providers.fundamentals import (
+    compute_revenue_growth_yoy_per_share,
+    map_fmp_period_to_fundamentals_row,
+)
+from service.providers.prices import map_yfinance_chunk_to_prices_schema
 
 FRED_SERIES = {
     "rate_10y": "DGS10",
@@ -33,23 +43,11 @@ YF_MACRO = {"vix": "^VIX", "benchmark_adj_close": "^GSPC",
             "gold": "GC=F", "cadusd": "CADUSD=X"}
 
 
-def _fred_csv(series_id, start, end):
-    url = (f"https://fred.stlouisfed.org/graph/fredgraph.csv"
-           f"?id={series_id}&cosd={start}&coed={end}")
-    import urllib.request
-    with urllib.request.urlopen(url, timeout=30) as r:
-        df = pd.read_csv(io.StringIO(r.read().decode()))
-    df.columns = ["date", series_id]
-    df["date"] = pd.to_datetime(df["date"])
-    df[series_id] = pd.to_numeric(df[series_id], errors="coerce")
-    return df.set_index("date")[series_id]
-
-
 def build_macro_csv(start="2015-01-01", end=None, out_path="macro.csv"):
     end = end or str(date.today())
     monthly = {}
     for name, sid in FRED_SERIES.items():
-        s = _fred_csv(sid, start, end).resample("ME").last()
+        s = fetch_fred_series(sid, start, end).resample("ME").last()
         monthly[name] = s
         time.sleep(0.5)
     import yfinance as yf
@@ -77,17 +75,13 @@ def build_prices_csv(tickers, start="2015-01-01", end=None, out_path="prices.csv
         chunk = tickers[i:i + 50]
         h = yf.download(chunk, start=start, end=end, progress=False,
                         auto_adjust=True, group_by="ticker")
-        for tk in chunk:
-            try:
-                sub = h[tk][["Close", "Volume"]].dropna()
-            except KeyError:
-                print(f"  skip {tk}: no data", file=sys.stderr)
-                continue
-            sub = sub.rename(columns={"Close": "adj_close", "Volume": "volume"})
-            sub["ticker"] = tk
-            frames.append(sub.reset_index().rename(columns={"Date": "date"}))
+        mapped = map_yfinance_chunk_to_prices_schema(h, chunk)
+        missing = set(chunk) - set(mapped["ticker"].unique())
+        for tk in missing:
+            print(f"  skip {tk}: no data", file=sys.stderr)
+        frames.append(mapped)
         time.sleep(1)
-    p = pd.concat(frames, ignore_index=True)[["date", "ticker", "adj_close", "volume"]]
+    p = pd.concat(frames, ignore_index=True)
     p.to_csv(out_path, index=False)
     print(f"prices.csv: {len(p):,} rows, {p['ticker'].nunique()} tickers -> {out_path}")
     return p
@@ -103,8 +97,8 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
     reporting delay; consider FMP's 'fillingDate' field to set the lag
     precisely per row (future improvement: use fillingDate as the panel's
     as-of key instead of period-end + fixed lag)."""
-    import urllib.request
     import json
+    import urllib.request
     base = "https://financialmodelingprep.com/api/v3"
     rows = []
     for tk in tickers:
@@ -118,31 +112,11 @@ def build_fundamentals_csv(tickers, api_key, out_path="fundamentals.csv",
             continue
         ra_by_date = {r["date"]: r for r in ra}
         for k in km:
-            r = ra_by_date.get(k["date"], {})
-            rows.append({
-                "date": k["date"], "ticker": tk,
-                "fcf_yield": k.get("freeCashFlowYield"),
-                "debt_to_equity": k.get("debtToEquity"),
-                "roe": k.get("roe"),
-                "revenue_growth": None,  # filled below from revenuePerShare yoy
-                "pe": k.get("peRatio"),
-                "ev_ebitda": k.get("enterpriseValueOverEBITDA"),
-                "dividend_yield": k.get("dividendYield"),
-                "interest_coverage": r.get("interestCoverage"),
-                "gross_margin": r.get("grossProfitMargin"),
-                "operating_margin": r.get("operatingProfitMargin"),
-                "free_cash_flow_margin": None,
-                "eps_revision": None,     # needs an estimates feed; leave blank
-                "shares_dilution": None,  # derive from share count yoy below
-                "_rps": k.get("revenuePerShare"),
-                "_shares": k.get("marketCap") and k.get("marketCap") / k["marketCap"] if False else None,
-            })
+            rows.append(map_fmp_period_to_fundamentals_row(tk, k, ra_by_date.get(k["date"], {})))
         time.sleep(0.3)
     f = pd.DataFrame(rows)
     f["date"] = pd.to_datetime(f["date"])
-    f = f.sort_values(["ticker", "date"])
-    f["revenue_growth"] = f.groupby("ticker")["_rps"].pct_change(4)  # yoy, per-share
-    f = f.drop(columns=[c for c in f.columns if c.startswith("_")])
+    f = compute_revenue_growth_yoy_per_share(f)
     f.to_csv(out_path, index=False)
     print(f"fundamentals.csv: {len(f):,} rows -> {out_path}")
     return f
