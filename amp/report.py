@@ -39,7 +39,7 @@ def _fmt(x, nd=3):
 
 def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
                  latest_date, audit, config, synth_validation=None,
-                 walk_forward_summary=None):
+                 walk_forward_summary=None, persistence_results=None):
     L = []
     L.append("# Market Priority Report")
     L.append(f"\nAs of rebalance date: **{pd.Timestamp(latest_date).date()}**")
@@ -77,6 +77,29 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
         L.append(f"| {r['factor']} | {_fmt(r['rolling_ic'])} | {_fmt(r['rolling_ic_se'])} | "
                  f"{_fmt(r['rolling_ic_t'], 2)} | {_fmt(r['hit_rate'], 2)} | "
                  f"{_arrow(r['strengthening_4p'])} |")
+
+    # ---- persistence diagnostic (exploratory) ----
+    if persistence_results is not None and len(persistence_results):
+        pr = persistence_results
+        n_tests = int(pr["n_tests_in_family"].iloc[0])
+        n_sig = int(pr["significant_fdr"].sum())
+        L.append("\n## Factor payoff persistence check (diagnostic — not yet used in weighting)")
+        L.append(f"\nDoes a factor's realized payoff persist from one rebalance to the next, or "
+                 f"mean-revert? This determines whether weighting today's ranking by trailing "
+                 f"average payoff (as this report currently does, below) is justified. "
+                 f"{n_tests} factor x lag test(s) run jointly, Benjamini-Hochberg FDR at "
+                 f"q<={config['fdr']}; **{n_sig} distinguishable from noise.**")
+        L.append("\n| Factor | Lag (periods) | AR beta | t | q | n | Reading |")
+        L.append("|---|---|---|---|---|---|---|")
+        for _, r in pr.sort_values(["factor", "lag"]).iterrows():
+            flag = "significant" if r["significant_fdr"] else "not significant"
+            n_disp = "n/a" if pd.isna(r["n"]) else int(r["n"])
+            L.append(f"| {r['factor']} | {int(r['lag'])} | {_fmt(r['beta'])} | "
+                     f"{_fmt(r['t_stat'], 2)} | {_fmt(r['q_value'], 3)} | {n_disp} | "
+                     f"{flag} — {r['classification']} |")
+        L.append("\nShown for every factor, not only FDR survivors: unlike the interaction "
+                 "evidence below, this is a diagnostic about the ranking methodology itself, not "
+                 "a narrated market finding, so the full picture matters more than a filtered one.")
 
     # ---- interactions / the why ----
     L.append("\n## Why these criteria may matter now (interaction evidence)")
@@ -160,4 +183,9 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
     if walk_forward_summary is not None and walk_forward_summary["n_periods"] > 0:
         L.append("- Walk-forward results above use overlapping holding periods and no transaction "
                  "costs; treat as a directional check, not a strategy return estimate.")
+    if persistence_results is not None and len(persistence_results):
+        L.append("- Priority ranking weights are currently set from trailing-average payoff "
+                 "regardless of the persistence check above; where that check finds "
+                 "mean-reversion (or is inconclusive) rather than persistence for a factor, "
+                 "its trailing-average weight should be read with added skepticism.")
     return "\n".join(L) + "\n"
