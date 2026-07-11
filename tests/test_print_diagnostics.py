@@ -18,6 +18,7 @@ def test_print_diagnostics_shows_non_surviving_pairs(tmp_path, capsys):
     # and so are non-surviving pairs -- the whole point is showing everything
     assert "False" in captured  # some rows have significant_fdr == False
     assert "Latest per-factor rolling stats" in captured
+    assert "Walk-forward: realized forward excess return" in captured
 
 
 def test_print_diagnostics_handles_missing_output_gracefully(tmp_path):

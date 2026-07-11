@@ -38,7 +38,8 @@ def _fmt(x, nd=3):
 
 
 def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
-                 latest_date, audit, config, synth_validation=None):
+                 latest_date, audit, config, synth_validation=None,
+                 walk_forward_summary=None):
     L = []
     L.append("# Market Priority Report")
     L.append(f"\nAs of rebalance date: **{pd.Timestamp(latest_date).date()}**")
@@ -118,6 +119,20 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
     for _, r in ranks.iterrows():
         L.append(f"| {int(r['rank'])} | {r['ticker']} | {_fmt(r['composite_score'])} |")
 
+    # ---- walk-forward (exploratory) ----
+    if walk_forward_summary is not None and walk_forward_summary["n_periods"] > 0:
+        wf = walk_forward_summary
+        L.append("\n## Walk-forward check: would this ranking have worked historically? (exploratory)")
+        L.append(f"\nAt each of {wf['n_periods']} historical rebalance date(s), ranked stocks "
+                 f"using only priority scores available as of that date, then measured the "
+                 f"realized forward excess return of the resulting top-N portfolio.")
+        L.append("\n| Periods | Mean forward excess return | ±SE | t | Hit rate |")
+        L.append("|---|---|---|---|---|")
+        L.append(f"| {wf['n_periods']} | {_fmt(wf['mean_forward_excess_return'], 4)} | "
+                 f"{_fmt(wf['se'], 4)} | {_fmt(wf['t_stat'], 2)} | {_fmt(wf['hit_rate'], 2)} |")
+        if wf["warning"]:
+            L.append(f"\n**{wf['warning']}**")
+
     # ---- synthetic validation ----
     if synth_validation:
         L.append("\n## Control test: planted-signal recovery (synthetic run)")
@@ -130,4 +145,7 @@ def build_report(priority_scores, rolled, interactions, ranks, weights, overlap,
     L.append("- Correlation-based evidence throughout; interaction terms support, never prove, mechanisms.")
     L.append("- Real-world use requires point-in-time fundamentals, survivorship-free universe, "
              "transaction costs, and out-of-sample validation.")
+    if walk_forward_summary is not None and walk_forward_summary["n_periods"] > 0:
+        L.append("- Walk-forward results above use overlapping holding periods and no transaction "
+                 "costs; treat as a directional check, not a strategy return estimate.")
     return "\n".join(L) + "\n"
