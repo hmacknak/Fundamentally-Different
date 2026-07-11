@@ -1,0 +1,82 @@
+name: Probe SimFin API (temporary, diagnostic only)
+
+# One-off probe to check what SimFin's free tier actually returns before
+# deciding whether to build a real provider adapter or pay for a deeper FMP
+# tier. Not part of the production pipeline. Delete once the evaluation in
+# docs/DECISIONS.md is resolved. Requires no repo changes on success or
+# failure -- it only prints findings to the job log.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe SimFin endpoints and report coverage
+        env:
+          SIMFIN_API_KEY: ${{ secrets.SIMFIN_API_KEY }}
+        run: |
+          python3 <<'PYEOF'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          KEY = os.environ["SIMFIN_API_KEY"]
+
+          def redact(s):
+              return s.replace(KEY, "***REDACTED***") if s else s
+
+          def try_get(url, headers=None, timeout=20):
+              req = urllib.request.Request(url, headers=headers or {})
+              try:
+                  with urllib.request.urlopen(req, timeout=timeout) as resp:
+                      body = resp.read().decode("utf-8", errors="replace")
+                      return resp.status, redact(body)[:1500]
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode("utf-8", errors="replace")
+                  return e.code, redact(body)[:1500]
+              except Exception as e:
+                  return None, redact(str(e))
+
+          print("=== Step 1: which base URL / auth scheme authenticates? ===")
+          candidates = [
+              ("v1 query-param, companies/list",
+               f"https://simfin.com/api/v1/companies/list?api-key={KEY}", None),
+              ("v2 query-param, companies/list",
+               f"https://simfin.com/api/v2/companies/list?api-key={KEY}", None),
+              ("v3 header Authorization, companies/list",
+               "https://backend.simfin.com/api/v3/companies/list",
+               {"Authorization": KEY}),
+              ("v3 header 'api-key', companies/list",
+               "https://backend.simfin.com/api/v3/companies/list",
+               {"api-key": KEY}),
+          ]
+          working = []
+          for label, url, headers in candidates:
+              status, body = try_get(url, headers)
+              print(f"--- {label} ---\nstatus={status}\n{body}\n")
+              if status == 200:
+                  working.append((label, url, headers))
+
+          if not working:
+              print("=== RESULT: no candidate authenticated successfully. ===")
+              print("SimFin's live REST API may require a paid SimFin+ plan, or "
+                    "the endpoint shapes above are stale. Recommend manually "
+                    "checking a current SimFin API key dashboard/docs page "
+                    "logged in as the account owner before further engineering.")
+          else:
+              print(f"=== RESULT: {len(working)} candidate(s) authenticated. "
+                    f"Probing statement history depth next. ===")
+              label, base_url, headers = working[0]
+              tickers = ["AAPL", "MSFT", "XOM", "JPM", "PG"]
+              for tk in tickers:
+                  for path in [
+                      f"/statements?ticker={tk}&statement=pl&period=quarterly&fyear-start=2000&fyear-end=2026",
+                      f"/companies/statements?ticker={tk}&statement=pl&period=quarterly",
+                  ]:
+                      url = base_url.rsplit("/", 1)[0] + path
+                      status, body = try_get(url, headers)
+                      print(f"--- {tk} {path} ---\nstatus={status}\n{body}\n")
+          PYEOF
