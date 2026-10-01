@@ -24,8 +24,15 @@ import numpy as np
 import pandas as pd
 
 from amp import (
-    features, interactions, persistence, priorities, report, scoring, synth,
-    validation, walkforward,
+    features,
+    interactions,
+    persistence,
+    priorities,
+    report,
+    scoring,
+    synth,
+    validation,
+    walkforward,
 )
 
 
@@ -233,10 +240,10 @@ def main(argv=None):
         big_ic = rolled[(rolled["date"] == rolled["date"].max())
                         & (rolled["rolling_ic_t"].abs() > 2.5)]
         surv_pairs = [f"{r['factor']} x {r['macro_state']}" for _, r in surv.iterrows()]
-        synth_val = [f"NULL RUN: {len(surv)} interaction(s) survived FDR "
-                     f"(expected ~0): {surv_pairs}",
-                     f"NULL RUN: {len(big_ic)} factor(s) with |rolling IC t| > 2.5 "
-                     f"(expected ~0-1 by chance): {list(big_ic['factor'])}",
+        synth_val = [(f"NULL RUN: {len(surv)} interaction(s) survived FDR "
+                     f"(expected ~0): {surv_pairs}"),
+                     (f"NULL RUN: {len(big_ic)} factor(s) with |rolling IC t| > 2.5 "
+                     f"(expected ~0-1 by chance): {list(big_ic['factor'])}"),
                      "Specificity " + ("PASSED" if len(surv) == 0 else "REVIEW NEEDED")]
         for line in synth_val:
             print(f"[control-test] {line}")

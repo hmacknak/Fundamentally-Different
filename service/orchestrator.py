@@ -93,8 +93,8 @@ def _export_fundamentals_csv(session: Session, universe: list[str], path: str) -
 def _write_failure_summary(output_dir: str, gate: GateResult) -> None:
     os.makedirs(output_dir, exist_ok=True)
     lines = ["# Market Priority Report — publication blocked", "",
-             "The data-quality gate failed; no report was published. "
-             "The prior valid report (if any) is untouched.", "", "## Failures"]
+             ("The data-quality gate failed; no report was published. "
+             "The prior valid report (if any) is untouched."), "", "## Failures"]
     lines += [f"- {f}" for f in gate.failures]
     if gate.warnings:
         lines += ["", "## Warnings"] + [f"- {w}" for w in gate.warnings]

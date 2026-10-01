@@ -109,7 +109,7 @@ def validate_inputs(prices_path, fundamentals_path, macro_path, output_dir):
 
     audit = {
         "input_hashes": {k: file_sha256(v) for k, v in paths.items()},
-        "row_counts": {k: int(len(frames[k])) for k in frames},
+        "row_counts": {k: len(frames[k]) for k in frames},
         "ticker_counts": {"prices": len(px_tickers), "fundamentals": len(fd_tickers),
                           "overlap": len(px_tickers & fd_tickers)},
         "date_ranges": {k: [str(frames[k]["date"].min().date()),

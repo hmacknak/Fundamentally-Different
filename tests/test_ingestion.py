@@ -4,7 +4,12 @@ import pandas as pd
 import pytest
 
 from service.db import get_session_factory, init_db
-from service.db.models import DataIngestionRun, FundamentalsReported, MacroObservation, PricesDaily
+from service.db.models import (
+    DataIngestionRun,
+    FundamentalsReported,
+    MacroObservation,
+    PricesDaily,
+)
 from service.ingestion import (
     check_data_quality_gate,
     compute_incremental_start,

@@ -44,7 +44,7 @@ def run_backtest(prices: pd.Series, signal: pd.Series) -> dict:
         "max_drawdown": max_drawdown,
         "hit_rate": hit_rate,
         "n_trades": n_trades,
-        "n_days": int(len(prices)),
+        "n_days": len(prices),
         "equity_curve": equity,
     }
 

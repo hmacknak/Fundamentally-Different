@@ -48,7 +48,7 @@ def walk_forward_evaluate(panel, priority_scores, factors_present, top_n=20,
             continue
         rows.append({
             "date": dt,
-            "n_holdings": int(len(valid)),
+            "n_holdings": len(valid),
             "portfolio_forward_excess_return": float(valid.mean()),
         })
     out = pd.DataFrame(rows)

@@ -40,7 +40,7 @@ def test_validate_inputs_deduplicates_and_reports_issues(tmp_path):
     m = tmp_path / "macro.csv"
     pd.DataFrame({"date": ["2020-01-01"]}).to_csv(m, index=False)
 
-    prices, fundamentals, macro, audit = validate_inputs(str(p), str(f), str(m), str(tmp_path))
+    prices, _fundamentals, _macro, audit = validate_inputs(str(p), str(f), str(m), str(tmp_path))
     assert len(prices) == 2  # duplicate (date, ticker) row dropped, keeping last
     assert any("duplicate" in issue for issue in audit["issues"])
     assert audit["ticker_counts"]["overlap"] == 1
@@ -59,7 +59,7 @@ def test_validate_inputs_drops_nonpositive_prices(tmp_path):
     m = tmp_path / "macro.csv"
     pd.DataFrame({"date": ["2020-01-01"]}).to_csv(m, index=False)
 
-    prices, fundamentals, macro, audit = validate_inputs(str(p), str(f), str(m), str(tmp_path))
+    prices, _fundamentals, _macro, _audit = validate_inputs(str(p), str(f), str(m), str(tmp_path))
     assert len(prices) == 1
     assert (prices["adj_close"] > 0).all()
 

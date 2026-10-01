@@ -153,10 +153,10 @@ class ResearchRun(Base):
     status: Mapped[str] = mapped_column(String, default="running")  # running|valid|blocked|failed
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
-    factor_scores: Mapped[list["FactorScore"]] = relationship(back_populates="research_run")
-    priority_scores: Mapped[list["PriorityScore"]] = relationship(back_populates="research_run")
-    interaction_tests: Mapped[list["InteractionTest"]] = relationship(back_populates="research_run")
-    security_ranks: Mapped[list["SecurityRank"]] = relationship(back_populates="research_run")
+    factor_scores: Mapped[list[FactorScore]] = relationship(back_populates="research_run")
+    priority_scores: Mapped[list[PriorityScore]] = relationship(back_populates="research_run")
+    interaction_tests: Mapped[list[InteractionTest]] = relationship(back_populates="research_run")
+    security_ranks: Mapped[list[SecurityRank]] = relationship(back_populates="research_run")
 
 
 class FactorScore(Base):
