@@ -16,7 +16,7 @@ import json
 import uuid
 
 import pandas as pd
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from service.db.models import (
@@ -58,12 +58,21 @@ def _hash_frame(df: pd.DataFrame) -> str:
 
 
 def _bulk_upsert(session: Session, model, rows: list[dict], index_elements: list[str],
-                 update_columns: list[str], chunk_size: int = 500) -> int:
+                 update_columns: list[str], chunk_size: int = 500,
+                 change_detection_columns: list[str] | None = None) -> int:
     """One INSERT ... ON CONFLICT DO UPDATE per chunk, instead of a
     query-then-insert round trip per row. The per-row version was fine
     against local SQLite in tests but made a full historical backfill against
     a real remote database (network round trip per row) impractically slow —
-    caught on the first live ingestion run."""
+    caught on the first live ingestion run.
+
+    change_detection_columns, when given, adds a WHERE guard so a conflicting
+    row is only actually rewritten when one of those columns' values differs
+    from what's already stored — a byte-identical re-fetch (e.g. yesterday's
+    price, refetched today) is skipped entirely rather than rewriting
+    retrieved_at/raw_payload_hash on every run. A real change (price revision,
+    fundamentals restatement) still updates everything in update_columns,
+    including lineage, preserving the provenance contract."""
     if not rows:
         return 0
     dialect = session.get_bind().dialect.name
@@ -78,13 +87,57 @@ def _bulk_upsert(session: Session, model, rows: list[dict], index_elements: list
     for i in range(0, len(rows), chunk_size):
         chunk = rows[i:i + chunk_size]
         stmt = insert_stmt(model).values(chunk)
+        where_clause = None
+        if change_detection_columns:
+            cols = model.__table__.c
+            where_clause = or_(*[
+                cols[c].is_distinct_from(getattr(stmt.excluded, c))
+                for c in change_detection_columns
+            ])
         stmt = stmt.on_conflict_do_update(
             index_elements=index_elements,
             set_={c: getattr(stmt.excluded, c) for c in update_columns},
+            where=where_clause,
         )
         session.execute(stmt)
         total += len(chunk)
     return total
+
+
+def compute_incremental_start(session: Session, date_col, group_col, group_values: list[str],
+                              default_start: dt.date) -> dt.date:
+    """The day after the EARLIEST "latest observed date" across group_values —
+    not the latest — so a straggler ticker/series that missed a day on a
+    prior run still gets caught up. Falls back to default_start when coverage
+    is incomplete (empty table, or any group_value missing entirely, e.g. a
+    newly added ticker) so new entries still get a real backfill rather than
+    silently starting mid-history.
+
+    This exists because the scheduled ingestion run used to hardcode
+    start=2015-01-01 on every invocation, re-fetching and re-upserting full
+    history for the whole universe daily; with ~1.49M price rows rewritten
+    every night and no retention/vacuum policy, that filled the database's
+    512MB storage cap."""
+    if not group_values:
+        return default_start
+    latest_by_group = dict(
+        session.query(group_col, func.max(date_col)).filter(group_col.in_(group_values))
+        .group_by(group_col).all()
+    )
+    if len(latest_by_group) < len(group_values):
+        return default_start
+    return min(latest_by_group.values()) + dt.timedelta(days=1)
+
+
+def prune_ingestion_runs(session: Session, keep_days: int = 90) -> int:
+    """data_ingestion_runs is an operational log, not point-in-time financial
+    data subject to CLAUDE.md's auditability rule, so bounding its retention
+    doesn't weaken auditability — it just stops an append-only table (whose
+    error_message can run tens of KB on a failed run) from growing forever."""
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=keep_days)
+    deleted = session.query(DataIngestionRun).filter(DataIngestionRun.started_at < cutoff).delete()
+    session.commit()
+    return deleted
 
 
 def _start_run(session: Session, domain: str, provider: str) -> str:
@@ -121,7 +174,8 @@ def ingest_prices(session: Session, prices: pd.DataFrame, provider: str) -> Inge
         ]
         n = _bulk_upsert(session, PricesDaily, rows, index_elements=["ticker", "date"],
                          update_columns=["adj_close", "volume", "provider", "retrieved_at",
-                                         "raw_payload_hash"])
+                                         "raw_payload_hash"],
+                         change_detection_columns=["adj_close", "volume"])
         session.commit()
         _finish_run(session, run_id, n, warnings, "succeeded")
         return IngestionResult(run_id, "prices", provider, n, warnings, "succeeded")
@@ -150,7 +204,8 @@ def ingest_macro(session: Session, macro: pd.DataFrame, provider: str) -> Ingest
                             "retrieved_at": now, "raw_payload_hash": payload_hash})
         n = _bulk_upsert(session, MacroObservation, rows,
                          index_elements=["series_name", "observation_date", "provider"],
-                         update_columns=["value", "retrieved_at", "raw_payload_hash"])
+                         update_columns=["value", "retrieved_at", "raw_payload_hash"],
+                         change_detection_columns=["value"])
         session.commit()
         _finish_run(session, run_id, n, warnings, "succeeded")
         return IngestionResult(run_id, "macro", provider, n, warnings, "succeeded")
@@ -186,7 +241,9 @@ def ingest_fundamentals(session: Session, fundamentals: pd.DataFrame, provider: 
         n = _bulk_upsert(session, FundamentalsReported, rows,
                          index_elements=["ticker", "period_end_date", "provider"],
                          update_columns=[*FUNDAMENTALS_FIELDS, "availability_date", "sector",
-                                         "retrieved_at", "raw_payload_hash"])
+                                         "retrieved_at", "raw_payload_hash"],
+                         change_detection_columns=[*FUNDAMENTALS_FIELDS, "availability_date",
+                                                    "sector"])
         session.commit()
         _finish_run(session, run_id, n, warnings, "succeeded")
         return IngestionResult(run_id, "fundamentals", provider, n, warnings, "succeeded")
