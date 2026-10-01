@@ -7,9 +7,11 @@ from service.db import get_session_factory, init_db
 from service.db.models import DataIngestionRun, FundamentalsReported, MacroObservation, PricesDaily
 from service.ingestion import (
     check_data_quality_gate,
+    compute_incremental_start,
     ingest_fundamentals,
     ingest_macro,
     ingest_prices,
+    prune_ingestion_runs,
 )
 
 
@@ -97,6 +99,91 @@ def test_ingest_fundamentals_derives_availability_date_from_lag(session_factory)
         ingest_fundamentals(s, fundamentals, provider="fmp", availability_lag_days=60)
         row = s.query(FundamentalsReported).filter_by(ticker="AAA").one()
         assert row.availability_date == dt.date(2020, 1, 31) + dt.timedelta(days=60)
+
+
+def test_ingest_prices_skips_rewrite_when_values_unchanged(session_factory):
+    with session_factory() as s:
+        ingest_prices(s, _prices_df(), provider="yfinance")
+        row_before = s.query(PricesDaily).filter_by(ticker="AAA", date=dt.date(2020, 1, 1)).one()
+        retrieved_before = row_before.retrieved_at
+        hash_before = row_before.raw_payload_hash
+
+        result = ingest_prices(s, _prices_df(), provider="yfinance")
+        assert result.status == "succeeded"
+
+        row_after = s.query(PricesDaily).filter_by(ticker="AAA", date=dt.date(2020, 1, 1)).one()
+        assert row_after.retrieved_at == retrieved_before
+        assert row_after.raw_payload_hash == hash_before
+
+
+def test_ingest_macro_skips_rewrite_when_value_unchanged(session_factory):
+    macro = pd.DataFrame({"date": [dt.date(2020, 1, 31)], "credit_spread": [1.5]})
+    with session_factory() as s:
+        ingest_macro(s, macro, provider="fred")
+        row_before = s.query(MacroObservation).filter_by(
+            series_name="credit_spread", observation_date=dt.date(2020, 1, 31)).one()
+        retrieved_before = row_before.retrieved_at
+
+        ingest_macro(s, macro, provider="fred")
+        row_after = s.query(MacroObservation).filter_by(
+            series_name="credit_spread", observation_date=dt.date(2020, 1, 31)).one()
+        assert row_after.retrieved_at == retrieved_before
+
+
+def test_compute_incremental_start_resumes_after_latest_date(session_factory):
+    with session_factory() as s:
+        for tk in ["AAA", "BBB"]:
+            ingest_prices(s, pd.DataFrame({"date": [dt.date(2020, 1, 5)], "ticker": [tk],
+                                           "adj_close": [10.0], "volume": [100]}), "yfinance")
+        start = compute_incremental_start(s, PricesDaily.date, PricesDaily.ticker,
+                                          ["AAA", "BBB"], dt.date(2015, 1, 1))
+        assert start == dt.date(2020, 1, 6)
+
+
+def test_compute_incremental_start_uses_earliest_coverage_so_stragglers_catch_up(session_factory):
+    with session_factory() as s:
+        ingest_prices(s, pd.DataFrame({"date": [dt.date(2020, 1, 5)], "ticker": ["AAA"],
+                                       "adj_close": [10.0], "volume": [100]}), "yfinance")
+        ingest_prices(s, pd.DataFrame({"date": [dt.date(2020, 1, 2)], "ticker": ["BBB"],
+                                       "adj_close": [10.0], "volume": [100]}), "yfinance")
+        start = compute_incremental_start(s, PricesDaily.date, PricesDaily.ticker,
+                                          ["AAA", "BBB"], dt.date(2015, 1, 1))
+        assert start == dt.date(2020, 1, 3)
+
+
+def test_compute_incremental_start_falls_back_when_coverage_incomplete(session_factory):
+    with session_factory() as s:
+        ingest_prices(s, pd.DataFrame({"date": [dt.date(2020, 1, 5)], "ticker": ["AAA"],
+                                       "adj_close": [10.0], "volume": [100]}), "yfinance")
+        # "CCC" has no rows at all (e.g. newly added to the universe) -> full backfill floor
+        start = compute_incremental_start(s, PricesDaily.date, PricesDaily.ticker,
+                                          ["AAA", "CCC"], dt.date(2015, 1, 1))
+        assert start == dt.date(2015, 1, 1)
+
+
+def test_compute_incremental_start_falls_back_on_empty_table(session_factory):
+    with session_factory() as s:
+        start = compute_incremental_start(s, PricesDaily.date, PricesDaily.ticker,
+                                          ["AAA", "BBB"], dt.date(2015, 1, 1))
+        assert start == dt.date(2015, 1, 1)
+
+
+def test_prune_ingestion_runs_deletes_only_old_rows(session_factory):
+    with session_factory() as s:
+        recent = DataIngestionRun(run_id="recent", domain="prices", provider="yfinance",
+                                  status="succeeded",
+                                  started_at=dt.datetime.now(dt.timezone.utc))
+        old = DataIngestionRun(run_id="old", domain="prices", provider="yfinance",
+                               status="succeeded",
+                               started_at=dt.datetime.now(dt.timezone.utc)
+                               - dt.timedelta(days=120))
+        s.add_all([recent, old])
+        s.commit()
+
+        deleted = prune_ingestion_runs(s, keep_days=90)
+        assert deleted == 1
+        remaining = {r.run_id for r in s.query(DataIngestionRun).all()}
+        assert remaining == {"recent"}
 
 
 def test_gate_passes_with_fresh_full_coverage_data(session_factory):

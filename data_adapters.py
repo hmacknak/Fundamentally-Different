@@ -41,6 +41,10 @@ FRED_SERIES = {
 }
 YF_MACRO = {"vix": "^VIX", "benchmark_adj_close": "^GSPC",
             "gold": "GC=F", "cadusd": "CADUSD=X"}
+# Every series_name build_macro_csv can emit (cpi_index is dropped in favor of
+# cpi_yoy before the frame is returned) — used to compute an incremental
+# ingestion start date without hand-duplicating this list elsewhere.
+ALL_MACRO_SERIES = [s for s in FRED_SERIES if s != "cpi_index"] + ["cpi_yoy"] + list(YF_MACRO)
 
 
 def build_macro_csv(start="2015-01-01", end=None, out_path="macro.csv"):

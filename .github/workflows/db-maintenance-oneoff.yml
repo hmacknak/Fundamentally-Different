@@ -1,0 +1,41 @@
+name: DB maintenance (one-off VACUUM)
+
+# TEMPORARY: added to recover from the 512MB storage cap incident documented
+# in docs/DECISIONS.md (2026-07-17 entry). Manual dispatch only, never
+# scheduled. Prunes data_ingestion_runs rows older than 90 days (operational
+# log only, not point-in-time financial data -- see CLAUDE.md rule 2/4) and
+# runs a plain VACUUM (not VACUUM FULL, which needs temporary headroom a full
+# database may not have) on the tables most affected by the nightly
+# full-rewrite bug that filled the database before it was fixed. Remove this
+# file once the space has been confirmed reclaimed -- it is not meant to be a
+# permanent fixture.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  vacuum:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install postgresql-client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Database size before
+        run: psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS size_before;"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Prune data_ingestion_runs older than 90 days
+        run: psql "$DATABASE_URL" -c "DELETE FROM data_ingestion_runs WHERE started_at < now() - interval '90 days';"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: VACUUM affected tables
+        run: |
+          for t in prices_daily data_ingestion_runs fundamentals_reported macro_observations; do
+            echo "::group::VACUUM $t"
+            psql "$DATABASE_URL" -c "VACUUM (VERBOSE, ANALYZE) $t;"
+            echo "::endgroup::"
+          done
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Database size after
+        run: psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS size_after;"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

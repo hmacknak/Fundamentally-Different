@@ -271,3 +271,65 @@ designed, not a bug.
   but non-zero-byte CSV) — a realistic state early in a deployment's life,
   not an error condition. Caught by the end-to-end orchestrator test; now
   treated as a valid zero-interactions result.
+
+## 2026-07-17 — Nightly ingestion filled the 512MB DB cap; made ingestion incremental
+- Problem: the scheduled `ingest.yml` run failed with
+  `psycopg2.errors.DiskFull: could not extend file because project size
+  limit (512 MB) has been exceeded`, which also broke the same day's
+  `publish-report.yml` run (the data-quality gate correctly refused to
+  publish from prices it couldn't update — working as intended, not a
+  second bug).
+- Root cause: `run_ingestion.py` hardcoded `--start 2015-01-01` and never
+  advanced it based on existing DB coverage. Every scheduled run re-fetched
+  and re-upserted full history for the whole ~503-ticker universe, so all
+  ~1.49M `prices_daily` rows were rewritten every night via
+  `ON CONFLICT DO UPDATE` — including `retrieved_at`/`raw_payload_hash`,
+  which `_bulk_upsert` always touched even when the underlying price was
+  byte-identical to what was already stored. With a table already near
+  capacity from live data alone, ~83 days of full-table daily rewrites and
+  no retention/VACUUM policy produced enough MVCC dead-tuple bloat to push
+  the database over its host-enforced 512MB cap.
+- Fix (`service/ingestion.py`, `run_ingestion.py`, `data_adapters.py`):
+  - `compute_incremental_start()` resumes each of prices/macro from the day
+    after the *earliest* "latest observed date" across the universe/series
+    (not the latest, so a straggler that missed a day still catches up),
+    falling back to `--start` when coverage is incomplete (empty table, or
+    a ticker/series with no rows at all yet, e.g. newly added to the
+    universe). `run_ingestion.py` uses this by default; a new
+    `--full-backfill` flag (also exposed as a `workflow_dispatch` boolean
+    input on `ingest.yml`) forces the old full-refetch behavior for a
+    deliberate one-time backfill or recovery.
+  - `_bulk_upsert()` gained an optional `change_detection_columns` guard
+    (`ON CONFLICT ... WHERE <col> IS DISTINCT FROM excluded.<col>`): a
+    conflicting row is only actually rewritten when a real value changed.
+    Applied to prices (`adj_close`, `volume`), macro (`value`), and
+    fundamentals (all reported fields). A genuine change (price revision,
+    fundamentals restatement) still rewrites lineage columns in full —
+    this narrows *no-op* rewrites only, so CLAUDE.md rule 4's provenance
+    contract (source/retrieved_at/effective/availability date per field)
+    is unaffected for any row whose value actually changed.
+  - `prune_ingestion_runs()` (default `keep_days=90`), called once per
+    ingestion run, bounds the append-only `data_ingestion_runs` log (one
+    observed failed run wrote a ~75KB `error_message`). This is operational
+    logging, not point-in-time financial data, so bounding its retention
+    does not weaken auditability under rule 2.
+  - `build_fundamentals_csv` takes no `start`/`end` at all — it always
+    pulls FMP's last `limit` periods per ticker regardless of DB state, so
+    its fetch size was already bounded; only the no-op-upsert guard applies
+    to that domain, not incremental start.
+- Not yet done (operational, not code): the database is still at its
+  512MB cap as of this fix landing. Recovering existing space needs a
+  manual, confirmed `VACUUM` pass against the live database (plain
+  `VACUUM`, not `VACUUM FULL`/`pg_repack` — those need temporary headroom
+  a full database may not have) and, if that's insufficient, a temporary
+  storage-limit bump from the DB host. This is a deliberate prod
+  operation requiring the owner's go-ahead, not something to script into
+  CI. Until it happens, the next scheduled ingestion run may still fail
+  on write even though the rewrite-everything bug is fixed, simply because
+  there's no free space left for the catch-up window's genuinely new rows.
+- Verification: `tests/test_ingestion.py` and `tests/test_run_ingestion_cli.py`
+  cover incremental-start resumption, the straggler/incomplete-coverage
+  fallback, the no-op-skip behavior for prices/macro, `--full-backfill`,
+  and `prune_ingestion_runs`. Full suite (109 tests) and `ruff check .`
+  pass. Not yet verified against the live Postgres database, since it has
+  no free space to write to until the VACUUM step above happens.
