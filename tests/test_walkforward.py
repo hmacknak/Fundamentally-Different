@@ -64,7 +64,7 @@ def test_composite_stock_ranks_as_of_date_matches_historical_slice():
 def test_composite_stock_ranks_explicit_missing_date_returns_empty_not_fallback():
     panel, pscores = _toy_panel_and_scores()
     missing_date = pd.Timestamp("2019-01-01")
-    ranks, weights, returned_date = composite_stock_ranks(
+    ranks, _weights, returned_date = composite_stock_ranks(
         panel, pscores, ["fcf_yield"], as_of_date=missing_date)
     assert ranks.empty
     assert returned_date == missing_date

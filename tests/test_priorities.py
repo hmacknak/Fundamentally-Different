@@ -1,5 +1,5 @@
-import pytest
 import pandas as pd
+import pytest
 
 from amp.priorities import composite_stock_ranks, overlap_matrix, score_priorities
 
@@ -50,7 +50,7 @@ def test_composite_stock_ranks_orders_by_score_descending():
     })
     pscores = pd.DataFrame({"date": ["2020-01-01"], "priority": ["Cash generation"],
                             "priority_score": [0.5]})
-    ranks, weights, latest_date = composite_stock_ranks(panel, pscores, ["fcf_yield"], top_n=2)
+    ranks, _weights, _latest_date = composite_stock_ranks(panel, pscores, ["fcf_yield"], top_n=2)
     assert ranks.iloc[0]["ticker"] == "A"
     assert ranks.iloc[0]["rank"] == 1
 

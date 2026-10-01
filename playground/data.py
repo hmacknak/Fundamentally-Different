@@ -11,9 +11,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from service.config import AppConfig  # noqa: E402
-from service.db.models import PricesDaily  # noqa: E402
-from service.db.session import get_engine, get_session_factory  # noqa: E402
+from service.config import AppConfig
+from service.db.models import PricesDaily
+from service.db.session import get_engine, get_session_factory
 
 
 def load_daily_prices(ticker: str, start: str | None = None, end: str | None = None) -> pd.Series:

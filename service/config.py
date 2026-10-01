@@ -42,7 +42,7 @@ class AppConfig:
     report_storage_path: str
 
     @classmethod
-    def from_env(cls, env: dict | None = None) -> "AppConfig":
+    def from_env(cls, env: dict | None = None) -> AppConfig:
         e = env if env is not None else os.environ
         return cls(
             fmp_api_key=e.get("FMP_API_KEY") or None,
