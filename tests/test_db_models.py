@@ -3,7 +3,7 @@ import datetime as dt
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from service.db import get_session_factory, init_db
+from service.db import get_engine, get_session_factory, init_db
 from service.db.models import (
     FactorScore,
     FundamentalsReported,
@@ -21,6 +21,21 @@ from service.db.models import (
 def session_factory():
     engine = init_db("sqlite:///:memory:")
     return get_session_factory(engine)
+
+
+def test_get_engine_pins_psycopg2_driver_for_bare_postgres_url():
+    # A bare "postgresql://" URL (the format hosted providers like Neon
+    # hand out) must resolve to psycopg2 regardless of which DBAPI driver
+    # SQLAlchemy's own defaults currently prefer -- SQLAlchemy 2.1 started
+    # defaulting to psycopg (v3), which this project doesn't install, and
+    # that broke the scheduled report run in production.
+    engine = get_engine("postgresql://user:pass@localhost/db")
+    assert engine.dialect.driver == "psycopg2"
+
+
+def test_get_engine_leaves_explicit_driver_url_untouched():
+    engine = get_engine("postgresql+psycopg2://user:pass@localhost/db")
+    assert engine.dialect.driver == "psycopg2"
 
 
 def test_init_db_creates_all_expected_tables():
