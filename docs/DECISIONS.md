@@ -333,3 +333,26 @@ designed, not a bug.
   and `prune_ingestion_runs`. Full suite (109 tests) and `ruff check .`
   pass. Not yet verified against the live Postgres database, since it has
   no free space to write to until the VACUUM step above happens.
+
+## 2026-10-02 — Playground BOS/CHoCH intraday backtest (SPY 1m) added
+
+- Context: the owner asked for a backtest of a Smart-Money-Concepts style
+  intraday strategy (BOS + CHoCH, enter on the retest of the CHoCH level,
+  stop below the prior low, 1:1 target) on SPY 1-minute bars and higher
+  timeframes. A spec was drafted in a separate chat, but its code
+  (`backtest_smc.py`, `run_spy.py`) was never committed here, so it was
+  rebuilt from that spec under `playground/smc/`.
+- Decision: keep it in `playground/` (not `amp/`). It touches no AMPE
+  module, database or report, and carries none of AMPE's guarantees.
+- Exception to `playground/README.md`: a dedicated workflow
+  (`.github/workflows/smc-backtest.yml`) runs it. The development sandbox
+  can't reach any market-data host, and the owner can't be expected to
+  run Python locally (CLAUDE.md rule 7). The workflow is self-contained,
+  needs no secrets and touches no AMPE job.
+- Data: Yahoo 1m via yfinance, ~30 days only, with provenance (source and
+  retrieval time) written to `data_provenance.json`. If the download
+  returns nothing, the job fails rather than falling back to synthetic data.
+- Open questions for the owner: stop below the origin low vs the nearest
+  swing low; whether 1m structure should reset each session; whether their
+  own BOS/CHoCH definition differs. A year-plus 1m data source (Polygon or
+  Alpaca, both need a key) is needed before any result means anything.

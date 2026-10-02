@@ -1,0 +1,42 @@
+name: SMC backtest (playground, SPY 1m)
+
+# Playground only -- not part of the audited AMPE pipeline (see
+# playground/smc/README.md). Downloads ~30 days of SPY 1-minute bars from
+# Yahoo, runs the BOS/CHoCH retest backtest on 1/5/15/30/60-minute bars and
+# uploads trades, charts and the comparison table as a build artifact.
+# Needs no secrets. Runs on manual dispatch and when playground/smc changes.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/smc/**"
+      - ".github/workflows/smc-backtest.yml"
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - run: python playground/smc/backtest_smc.py --selftest
+      - run: python playground/smc/run_spy.py --out results --save results/spy_1min.csv
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo '## SPY BOS/CHoCH retest (net of costs)'
+            echo '```'
+            cat results/data_provenance.json 2>/dev/null || echo "no data downloaded"
+            echo
+            cat results/compare/compare.txt 2>/dev/null || echo "no comparison table"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smc-backtest-results
+          path: results/
+          if-no-files-found: warn

@@ -17,6 +17,12 @@ Priority Engine's actual research pipeline.
 Treat anything printed here as "interesting to look at," not as investment
 research.
 
+One exception to the workflow rule above: `playground/smc/` (an intraday
+BOS/CHoCH backtest on SPY 1-minute bars) has its own self-contained
+workflow, `.github/workflows/smc-backtest.yml`, which downloads data from
+Yahoo because the development sandbox can't. It imports nothing from AMPE.
+See `playground/smc/README.md`.
+
 ## Setup
 
 Uses the same database the production pipeline already populates
