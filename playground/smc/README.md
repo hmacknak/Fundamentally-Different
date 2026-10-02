@@ -65,7 +65,8 @@ slightly confounds the timeframe comparison, so run both ways.
 ```bash
 pip install -r requirements.txt -r playground/requirements.txt
 python playground/smc/backtest_smc.py --selftest
-python playground/smc/run_spy.py                       # Yahoo, ~30 days of 1m bars
+python playground/smc/run_spy.py                       # Alpaca if keys are set, else Yahoo
+ALPACA_API_KEY=... ALPACA_API_SECRET=... python playground/smc/run_spy.py --years 5
 python playground/smc/run_spy.py --csv longer_export.csv
 python playground/smc/backtest_smc.py data.csv --compare 1,5,15,30,60
 python playground/smc/backtest_smc.py data.csv --timeframe 5 --plot-trades 10
@@ -112,5 +113,9 @@ Without a local setup, the **SMC backtest** GitHub Actions workflow
   is correct (close-based breaks, 5-bar fractal swings, and a prior
   lower-highs/lower-lows trend required). Confirmed.
 
-The strategy definition is now locked. Next step: run it on a year or more
-of 1-minute data, which Yahoo cannot supply.
+The strategy definition is now locked. Multi-year 1m data comes from Alpaca
+(free account; add `ALPACA_API_KEY` and `ALPACA_API_SECRET` as repository
+Actions secrets). It's fetched raw (unadjusted) from the SIP feed, which is
+fine for an intraday strategy that never holds overnight. When the history
+exceeds a year, the last 12 months are also reported separately as a
+holdout, which no parameter choice may use.

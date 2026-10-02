@@ -1,12 +1,21 @@
 name: SMC backtest (playground, SPY 1m)
 
 # Playground only -- not part of the audited AMPE pipeline (see
-# playground/smc/README.md). Downloads ~30 days of SPY 1-minute bars from
-# Yahoo, runs the BOS/CHoCH retest backtest on 1/5/15/30/60-minute bars and
-# uploads trades, charts and the comparison table as a build artifact.
-# Needs no secrets. Runs on manual dispatch and when playground/smc changes.
+# playground/smc/README.md). Downloads SPY 1-minute bars, runs the BOS/CHoCH
+# retest backtest on 1/5/15/30/60-minute bars and uploads trades, charts and
+# the comparison tables as a build artifact. Runs on manual dispatch and when
+# playground/smc changes.
+#
+# Secrets (Settings -> Secrets and variables -> Actions), both optional:
+#   ALPACA_API_KEY, ALPACA_API_SECRET   free Alpaca account; enables multi-
+#                                       year history. Without them the job
+#                                       falls back to Yahoo (~30 days only).
 on:
   workflow_dispatch:
+    inputs:
+      years:
+        description: "Years of 1m history to fetch from Alpaca"
+        default: "5"
   push:
     paths:
       - "playground/smc/**"
@@ -22,7 +31,12 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt -r playground/requirements.txt
       - run: python playground/smc/backtest_smc.py --selftest
-      - run: python playground/smc/run_spy.py --out results --save results/spy_1min.csv
+      - run: >
+          python playground/smc/run_spy.py --out results --save results/spy_1min.csv
+          --years "${{ github.event.inputs.years || '5' }}"
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
       - name: Job summary
         if: always()
         run: |
@@ -31,7 +45,12 @@ jobs:
             echo '```'
             cat results/data_provenance.json 2>/dev/null || echo "no data downloaded"
             echo
+            echo; echo 'Full period'
             cat results/compare/compare.txt 2>/dev/null || echo "no comparison table"
+            if [ -f results/holdout/compare.txt ]; then
+              echo; echo 'In-sample'; cat results/in_sample/compare.txt
+              echo; echo 'Holdout (most recent 12 months)'; cat results/holdout/compare.txt
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

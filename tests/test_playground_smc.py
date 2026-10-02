@@ -131,3 +131,64 @@ def test_load_csv_handles_dst_change_with_mixed_offsets(tmp_path):
     df.rename_axis("Datetime").to_csv(path)  # writes -04:00 and -05:00 offsets
     loaded = bt.load_csv(str(path))
     assert list(loaded.index) == idx
+
+
+class _FakeResp:
+    def __init__(self, status, body):
+        self.status_code, self._body, self.text = status, body, str(body)
+
+    def json(self):
+        return self._body
+
+
+class _FakeSession:
+    def __init__(self, pages):
+        self.pages, self.calls = list(pages), []
+
+    def get(self, url, headers, params, timeout):
+        self.calls.append(dict(params))
+        return self.pages.pop(0)
+
+
+def _alpaca_bar(ts, px):
+    return {"t": ts, "o": px, "h": px + 0.1, "l": px - 0.1, "c": px, "v": 100, "n": 1,
+            "vw": px}
+
+
+def test_alpaca_download_pages_and_parses():
+    import run_spy
+    pages = [_FakeResp(200, {"bars": [_alpaca_bar("2024-03-01T14:30:00Z", 500.0)],
+                             "next_page_token": "abc"}),
+             _FakeResp(200, {"bars": [_alpaca_bar("2024-03-01T14:31:00Z", 501.0)],
+                             "next_page_token": None})]
+    sess = _FakeSession(pages)
+    df = run_spy.download_alpaca_1m("SPY", 1, "k", "s", session=sess)
+    assert list(df["close"]) == [500.0, 501.0]
+    assert df.index[0] == pd.Timestamp("2024-03-01 09:30", tz=bt.ET)
+    assert sess.calls[1]["page_token"] == "abc"
+    assert sess.calls[0]["adjustment"] == "raw" and sess.calls[0]["feed"] == "sip"
+
+
+def test_alpaca_download_fails_loudly_on_error_or_empty():
+    import run_spy
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        run_spy.download_alpaca_1m("SPY", 1, "k", "s",
+                                   session=_FakeSession([_FakeResp(403, {"message": "no"})]))
+    with pytest.raises(RuntimeError, match="no 1-minute bars"):
+        run_spy.download_alpaca_1m("SPY", 1, "k", "s",
+                                   session=_FakeSession([_FakeResp(200, {"bars": None})]))
+
+
+def test_runner_reports_holdout_split_on_long_history(tmp_path, capsys):
+    import run_spy
+    csv = tmp_path / "long.csv"
+    bars = random_walk_bars(sessions=330, seed=11)
+    bars.rename_axis("timestamp").to_csv(csv)
+    out = tmp_path / "res"
+    rc = run_spy.main(["--csv", str(csv), "--out", str(out), "--compare", "1,5",
+                       "--holdout-months", "2", "--plot-trades", "0"])
+    assert rc == 0
+    printed = capsys.readouterr().out
+    assert "In-sample" in printed and "Holdout" in printed
+    assert (out / "holdout" / "compare.txt").exists()
+    assert (out / "in_sample" / "compare.txt").exists()
