@@ -551,3 +551,13 @@ After this run, no re-tuning on these results.
     positive on at least 6 of 9 sectors.
   - 2016+ overlaps the data that inspired the hypothesis, so this checks the
     rule is still alive and executable, not discovery.
+- First executable run ([run 36953269829](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36953269829))
+  is **INVALID: data bug.**
+  - It pooled -5.82 bp (t -1.33, 5/9 positive), with a portfolio max DD of
+    -49.9%.
+  - The Alpaca bars were unadjusted (`adjustment=raw`). Positions are held
+    overnight, so splits and dividend drops showed up as fake losses. The
+    -50% drawdown is a split-artifact signature.
+  - Fix: download with `adjustment=all`, and abort on any close-to-close
+    move above 25%. The pre-registered rule, period and pass bar are
+    unchanged. The rerun result below is the one that counts.

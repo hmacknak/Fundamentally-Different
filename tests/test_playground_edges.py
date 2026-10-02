@@ -147,3 +147,12 @@ def test_live_end_to_end(tmp_path):
     out = tmp_path / "o"
     assert rl.main(["--intraday-dir", str(tmp_path), "--out", str(out)]) == 0
     assert "Portfolio" in (out / "report.md").read_text()
+
+
+def test_live_aborts_on_unadjusted_split():
+    import rel_ibs_live as rl
+    m = _minutes(4, seed=2)
+    last_day = m.index.normalize() == m.index.normalize()[-1]
+    m.loc[last_day, ["open", "high", "low", "close"]] /= 2  # fake 2:1 split
+    with pytest.raises(ValueError, match="implausible"):
+        rl.daily_from_minutes(m)

@@ -64,7 +64,8 @@ ALPACA_BARS_URL = "https://data.alpaca.markets/v2/stocks/{ticker}/bars"
 
 def download_alpaca_1m(ticker: str, years: float, key: str, secret: str,
                        feed: str = "sip", session: requests.Session | None = None,
-                       retries: int = 6, backoff: float = 2.0) -> pd.DataFrame:
+                       retries: int = 6, backoff: float = 2.0,
+                       adjustment: str = "raw") -> pd.DataFrame:
     """Fetch raw (unadjusted) 1m bars from Alpaca's market-data API, paging
     through `next_page_token`. Alpaca stamps bars at their start, in UTC.
 
@@ -77,7 +78,7 @@ def download_alpaca_1m(ticker: str, years: float, key: str, secret: str,
     headers = {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
     params = {"timeframe": "1Min", "start": start.isoformat(timespec="seconds"),
               "end": end.isoformat(timespec="seconds"), "limit": 10000,
-              "adjustment": "raw", "feed": feed, "sort": "asc"}
+              "adjustment": adjustment, "feed": feed, "sort": "asc"}
     rows: list[dict] = []
     while True:
         for attempt in range(retries + 1):
@@ -121,6 +122,8 @@ def main(argv=None) -> int:
     ap.add_argument("--source", choices=["auto", "alpaca", "yahoo"], default="auto")
     ap.add_argument("--years", type=float, default=5.0, help="Alpaca history length")
     ap.add_argument("--feed", default="sip", help="Alpaca feed: sip (all venues) or iex")
+    ap.add_argument("--adjustment", default="raw", choices=["raw", "split", "dividend", "all"],
+                    help="Alpaca price adjustment; use 'all' for anything held overnight")
     ap.add_argument("--holdout-months", type=int, default=12)
     ap.add_argument("--ticker", default="SPY")
     ap.add_argument("--save", default="spy_1min.csv")
@@ -146,9 +149,10 @@ def main(argv=None) -> int:
             return 2
         retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
         if source == "alpaca":
-            raw = download_alpaca_1m(a.ticker, a.years, key, secret, feed=a.feed)
+            raw = download_alpaca_1m(a.ticker, a.years, key, secret, feed=a.feed,
+                                     adjustment=a.adjustment)
             desc = (f"Alpaca market data v2, timeframe=1Min, feed={a.feed}, "
-                    f"adjustment=raw")
+                    f"adjustment={a.adjustment}")
         else:
             raw = download_yahoo_1m(a.ticker)
             desc = "Yahoo Finance via yfinance, interval=1m, auto_adjust=False, prepost=False"

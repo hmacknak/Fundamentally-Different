@@ -25,7 +25,7 @@ jobs:
           mkdir -p data/intraday
           for t in SPY XLB XLE XLF XLI XLK XLP XLU XLV XLY; do
             python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
-              --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only
+              --adjustment all --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only
           done
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}

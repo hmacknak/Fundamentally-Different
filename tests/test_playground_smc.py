@@ -259,3 +259,11 @@ def test_alpaca_download_retries_on_rate_limit():
         run_spy.download_alpaca_1m(
             "SPY", 1, "k", "s", backoff=0.0, retries=1,
             session=_FakeSession([_FakeResp(429, {}), _FakeResp(429, {})]))
+
+
+def test_alpaca_adjustment_is_passed_through():
+    import run_spy
+    sess = _FakeSession([_FakeResp(200, {"bars": [_alpaca_bar("2024-03-01T14:30:00Z", 1.0)],
+                                         "next_page_token": None})])
+    run_spy.download_alpaca_1m("SPY", 1, "k", "s", session=sess, adjustment="all")
+    assert sess.calls[0]["adjustment"] == "all"

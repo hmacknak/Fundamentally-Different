@@ -11,7 +11,9 @@ same close, which cannot be done live. Here the signal uses only bars before
   Trade:     buy at the close (15:59 bar close, a proxy for the auction
              price), sell at the next session's close. 1 bp per side.
 
-Sessions missing the 15:49 or 15:59 bar (half days) are skipped.
+Sessions missing the 15:49 or 15:59 bar (half days) are skipped. Bars must
+be split- and dividend-adjusted (Alpaca adjustment=all), because positions
+are held overnight. A close-to-close move above MAX_DAILY_MOVE aborts the run.
 
 Data: Alpaca SIP 1m, 2016 onward. This period overlaps the 2014+ data the
 hypothesis was formed from, so this run checks the rule is still alive and
@@ -50,6 +52,7 @@ COST_BP = 1.0
 ALPHA = 0.05
 MIN_POSITIVE = 6
 # ---------------------------------------------------------------------------
+MAX_DAILY_MOVE = 0.25  # data-quality guard, not a strategy parameter
 
 
 def daily_from_minutes(m: pd.DataFrame) -> pd.DataFrame:
@@ -66,6 +69,11 @@ def daily_from_minutes(m: pd.DataFrame) -> pd.DataFrame:
                        index=day[hhmm == CLOSE_BAR])
     out["close"] = closes
     out = out[out["last_hhmm"] == "15:49"].dropna(subset=["close"])
+    jumps = out["close"].pct_change().abs()
+    if (jumps > MAX_DAILY_MOVE).any():
+        bad = jumps[jumps > MAX_DAILY_MOVE]
+        raise ValueError(f"implausible close-to-close moves (unadjusted split?): "
+                         f"{bad.round(3).to_dict()}")
     rng = out["hi"] - out["lo"]
     out["ibs"] = ((out["last"] - out["lo"]) / rng).where(rng > 0)
     return out
