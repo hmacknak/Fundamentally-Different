@@ -460,3 +460,15 @@ Written and committed before any result was seen. The protocol is in
 - Known prior: later studies report the effect weakened after the paper's
   1993–2013 sample, except on volatile days. We test only the plain rule.
   Any volatility-conditioned variant would be a new pre-registration.
+- Result ([run 36950635535](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36950635535),
+  2016-01-05 .. 2026-10-01, about 2,680 days per ticker): **NO EDGE.**
+  All three tests failed.
+  - SPY: -1.08 bp/day net, -0.22 bp/day gross, HAC t -1.78, hit rate 46.9%.
+  - QQQ, IWM and DIA pooled: -1.92 bp/day, t -3.64, negative on all 3.
+  - SPY over the last 12 months: -0.76 bp/day.
+  - The gross effect is roughly zero (the slope of the last half-hour
+    return on the first is 0.005-0.026, economically nil), so costs of
+    about 0.9 bp per round trip make it a steady loser.
+  - This matches later literature: the plain rule has not worked since the
+    paper's sample. Per the pre-registration, no variants are tested on
+    this data.
