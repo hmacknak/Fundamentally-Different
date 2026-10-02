@@ -532,3 +532,22 @@ After this run, no re-tuning on these results.
   - Costs: 2 bp per side.
   - Pass if the pooled per-day excess > 0 with Newey-West one-sided
     p < 0.05 AND the effect is positive on at least 6 of 9 sectors.
+- Relative-IBS result ([run 36952753607](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36952753607)):
+  **CONFIRMED on the untouched 1999-2013 sample.**
+  - Pooled: 1,327 signal days, +7.25 bp per signal day net, Newey-West
+    t 2.17, p 0.015.
+  - Positive on 7 of 9 sectors: XLY +24.6, XLP +16.0, XLV +15.7, XLB +14.7,
+    XLI +10.3, XLF +8.1, XLU +6.8; XLE -15.8, XLK -2.7 bp.
+  - This is the first idea to pass a pre-registered out-of-sample test this
+    session. The session ran about eight test rounds in all, so a p of
+    0.015 is meaningful but not decisive.
+- Caveat: that test read the official close to decide a trade at the same
+  close, which cannot be done live.
+- Next test, fixed before running (`playground/edges/rel_ibs_live.py`):
+  - The signal uses bars before 15:50 (the MOC cutoff); trade at the
+    15:59 close and exit at the next close, 1 bp per side.
+  - Data: Alpaca 1m, 2016+.
+  - Pass if the pooled per-day excess > 0 with p < 0.05 AND the effect is
+    positive on at least 6 of 9 sectors.
+  - 2016+ overlaps the data that inspired the hypothesis, so this checks the
+    rule is still alive and executable, not discovery.

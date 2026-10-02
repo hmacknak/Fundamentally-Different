@@ -111,3 +111,39 @@ def test_rel_ibs_requires_market_not_weak_and_is_causal(tmp_path):
         x.index = pd.bdate_range("1998-06-01", periods=5000)
         x.to_csv(dd / f"{tk}.csv")
     assert ri.main(["--daily-dir", str(dd), "--out", str(tmp_path / "o")]) == 0
+
+
+def _minutes(days=30, seed=0):
+    rng = np.random.default_rng(seed)
+    frames, px = [], 100.0
+    for d in pd.bdate_range("2024-01-02", periods=days):
+        idx = pd.date_range(pd.Timestamp(f"{d:%Y-%m-%d} 09:30", tz="America/New_York"),
+                            periods=390, freq="1min")
+        c = px + np.cumsum(rng.normal(0, 0.03, 390))
+        o = np.r_[px, c[:-1]]
+        frames.append(pd.DataFrame({"open": o, "close": c, "high": np.maximum(o, c) + 0.01,
+                                    "low": np.minimum(o, c) - 0.01, "volume": 1.0},
+                                   index=idx))
+        px = c[-1]
+    return pd.concat(frames)
+
+
+def test_live_signal_ignores_bars_after_cutoff():
+    import rel_ibs_live as rl
+    m = _minutes(5, seed=1)
+    base = rl.daily_from_minutes(m)
+    m2 = m.copy()
+    late = m2.index.strftime("%H:%M") >= "15:50"
+    m2.loc[late, ["high", "close"]] = 1e6  # wild moves after the cutoff
+    after = rl.daily_from_minutes(m2)
+    pd.testing.assert_series_equal(base["ibs"], after["ibs"])
+    assert (after["close"] == 1e6).all()  # trade price is the 15:59 close
+
+
+def test_live_end_to_end(tmp_path):
+    import rel_ibs_live as rl
+    for i, tk in enumerate((*rl.SECTORS, "SPY")):
+        _minutes(40, seed=80 + i).rename_axis("timestamp").to_csv(tmp_path / f"{tk}.csv")
+    out = tmp_path / "o"
+    assert rl.main(["--intraday-dir", str(tmp_path), "--out", str(out)]) == 0
+    assert "Portfolio" in (out / "report.md").read_text()

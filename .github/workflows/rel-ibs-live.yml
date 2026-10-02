@@ -1,0 +1,41 @@
+name: Relative IBS executable test (playground, pre-registered)
+
+# Playground only. Executable (15:50-signal, trade-at-close) test of the
+# relative IBS rule on 2016+ Alpaca 1m data for SPY and the nine sector
+# SPDRs. Protocol in playground/edges/rel_ibs_live.py and docs/DECISIONS.md.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/edges/rel_ibs_live.py"
+      - ".github/workflows/rel-ibs-live.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - name: Download 1m bars from Alpaca
+        run: |
+          mkdir -p data/intraday
+          for t in SPY XLB XLE XLF XLI XLK XLP XLU XLV XLY; do
+            python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
+              --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only
+          done
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: python playground/edges/rel_ibs_live.py --intraday-dir data/intraday --out rel_ibs_live
+      - name: Job summary
+        if: always()
+        run: cat rel_ibs_live/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rel-ibs-live-results
+          path: rel_ibs_live/
