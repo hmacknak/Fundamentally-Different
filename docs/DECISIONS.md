@@ -472,3 +472,34 @@ Written and committed before any result was seen. The protocol is in
   - This matches later literature: the plain rule has not worked since the
     paper's sample. Per the pre-registration, no variants are tested on
     this data.
+
+## 2026-10-02 — Pre-registered anomaly family test (H1-H4)
+
+Written and committed before any result was seen. The protocol is in
+`playground/edges/edge_family.py`. Each rule is taken as published, with no
+parameters fitted on our data:
+
+- **H1 TOM:** long the last trading day of the month and the first 3 of the
+  next. Effect is TOM-day return minus other-day return. Tested on 2009+.
+- **H2 OVN:** hold close to open. Effect is the net overnight return minus
+  the intraday return. Tested on 2009+.
+- **H3 IBS:** if IBS < 0.2, buy at the close and sell at the next close.
+  Effect is the next-day return after a signal minus the next-day return
+  otherwise. Tested on 2014+.
+- **H4 IMHV:** the intraday momentum rule, traded only when |r_first| is
+  above the trailing-252-day 2/3 quantile. Tested on 2016+.
+
+Setup:
+
+- Costs are 1 bp per side.
+- Errors are Newey-West with 5 lags.
+- Daily bars come from Yahoo (adjusted). 1m bars come from Alpaca SIP.
+
+An edge is claimed only if both hold:
+
+1. On SPY over the post-publication period, the hypothesis is rejected
+   under Holm correction at family alpha 0.05 (one-sided).
+2. QQQ, IWM and DIA pooled per day give one-sided p < 0.05, and the effect
+   is positive on at least 2 of the 3.
+
+After this run, no re-tuning on these results.

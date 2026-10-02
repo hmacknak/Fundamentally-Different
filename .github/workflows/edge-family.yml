@@ -1,0 +1,45 @@
+name: Anomaly family test (playground, pre-registered)
+
+# Playground only. Pre-registered, Holm-corrected test of four published
+# anomalies on SPY with QQQ/IWM/DIA confirmation. Protocol in
+# playground/edges/edge_family.py and docs/DECISIONS.md.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/edges/**"
+      - ".github/workflows/edge-family.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - run: python playground/edges/fetch_daily.py SPY QQQ IWM DIA --out data/daily
+      - name: Download 1m bars from Alpaca
+        run: |
+          for t in SPY QQQ IWM DIA; do
+            python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
+              --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only
+          done
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: >
+          python playground/edges/edge_family.py --daily-dir data/daily
+          --intraday-dir data/intraday --out edges
+      - name: Job summary
+        if: always()
+        run: cat edges/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edge-family-results
+          path: |
+            edges/
+            data/daily/provenance.json
