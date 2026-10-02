@@ -9,6 +9,7 @@ on:
   push:
     paths:
       - "playground/smc/research_smc.py"
+      - "playground/smc/confirm_smc.py"
       - ".github/workflows/smc-research.yml"
 
 jobs:
@@ -28,12 +29,27 @@ jobs:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
       - run: python playground/smc/research_smc.py research/spy_1min.csv --out research
+      - name: Download QQQ, IWM, DIA for the cross-ticker confirmation
+        run: |
+          for t in QQQ IWM DIA; do
+            python playground/smc/run_spy.py --source alpaca --years 5 --ticker "$t" \
+              --out "research/data_$t" --save "research/$t.csv" --download-only
+          done
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: >
+          python playground/smc/confirm_smc.py
+          QQQ=research/QQQ.csv IWM=research/IWM.csv DIA=research/DIA.csv
+          --out research/confirm
       - name: Job summary
         if: always()
-        run: cat research/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - name: Drop the raw CSV from the artifact
+        run: |
+          cat research/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          cat research/confirm/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Drop the raw CSVs from the artifact
         if: always()
-        run: rm -f research/spy_1min.csv
+        run: rm -f research/*.csv
       - uses: actions/upload-artifact@v4
         if: always()
         with:

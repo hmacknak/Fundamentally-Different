@@ -401,3 +401,24 @@ Written and committed before any result was seen. The protocol lives in
 - An edge is claimed only if a variant beats 2.41 in-sample AND on the
   holdout has net R > 0 with a one-sided p < 0.05/3 (t > 2.13). Anything
   less is reported as no edge, however good the best row looks.
+
+## 2026-10-02 — Variant search result, and pre-registered cross-ticker test
+
+- Search result ([run 36948159041](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36948159041)):
+  **no edge under the pre-registered rule.**
+  - The best in-sample variant was 5m, swing 3, 1:1 (136 trades, +0.213R,
+    t 2.92). It beat the 2.41 luck benchmark.
+  - On the holdout it made +0.167R over only 29 trades (t 1.15), which
+    fails the t > 2.13 bar. The holdout has too few trades to settle it
+    either way.
+  - The 09:35 vs 10:00 entry-start dimension was inert: no setup completes
+    before 10:00 at these swing sizes, so the effective grid was 36
+    variants and the 2.41 benchmark was conservative.
+- Next test, fixed before running (`playground/smc/confirm_smc.py`):
+  - Run that one variant, unchanged, on QQQ, IWM and DIA over the same 5
+    years. It was chosen on SPY alone, so this data is out-of-sample.
+  - Pass only if pooled net R > 0 with a one-sided p < 0.05, using
+    day-clustered t-stats because the ETFs are correlated, AND net R > 0
+    on at least 2 of the 3 tickers.
+  - Whatever the outcome, there will be no further re-tuning on these
+    tickers. A pass would justify forward paper trading, not real money.

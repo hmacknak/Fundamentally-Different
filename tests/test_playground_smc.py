@@ -231,3 +231,17 @@ def test_research_protocol_runs_end_to_end(tmp_path):
     report = (out / "report.md").read_text()
     assert "EDGE" in report
     assert (out / "in_sample_grid.csv").exists()
+
+
+def test_confirm_runs_and_locks_variant(tmp_path):
+    import confirm_smc as cs
+    assert cs.VARIANT == {"tf": 5, "swing_n": 3, "rr": 1.0, "entry_start": "09:35",
+                          "vwap_filter": False}
+    paths = []
+    for i, tk in enumerate(("AAA", "BBB")):
+        csv = tmp_path / f"{tk}.csv"
+        random_walk_bars(sessions=60, seed=20 + i).rename_axis("timestamp").to_csv(csv)
+        paths.append(f"{tk}={csv}")
+    out = tmp_path / "confirm"
+    assert cs.main([*paths, "--out", str(out)]) == 0
+    assert "CONFIRMED" in (out / "report.md").read_text()
