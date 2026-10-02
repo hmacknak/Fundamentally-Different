@@ -81,3 +81,15 @@ def test_end_to_end_reports_verdicts(tmp_path):
     v = pd.read_csv(out / "verdicts.csv").set_index("hyp")
     assert bool(v.loc["TOM", "EDGE"]) is True
     assert bool(v.loc["OVN", "EDGE"]) is False
+
+
+def test_ibs_confirm_runs_on_basket(tmp_path):
+    import ibs_confirm as ic
+    assert len(ic.BASKET) == 11 and not set(ic.BASKET) & set(ef.TICKERS)
+    dd = tmp_path / "daily"
+    dd.mkdir()
+    for i, tk in enumerate(ic.BASKET):
+        daily(3500, seed=40 + i).to_csv(dd / f"{tk}.csv")
+    out = tmp_path / "c"
+    assert ic.main(["--daily-dir", str(dd), "--out", str(out)]) == 0
+    assert "CONFIRMED" in (out / "report.md").read_text()

@@ -20,7 +20,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt -r playground/requirements.txt
-      - run: python playground/edges/fetch_daily.py SPY QQQ IWM DIA --out data/daily
+      - run: >
+          python playground/edges/fetch_daily.py SPY QQQ IWM DIA
+          XLB XLE XLF XLI XLK XLP XLU XLV XLY EFA EEM --out data/daily
       - name: Download 1m bars from Alpaca
         run: |
           mkdir -p data/intraday
@@ -34,9 +36,12 @@ jobs:
       - run: >
           python playground/edges/edge_family.py --daily-dir data/daily
           --intraday-dir data/intraday --out edges
+      - run: python playground/edges/ibs_confirm.py --daily-dir data/daily --out edges/ibs_confirm
       - name: Job summary
         if: always()
-        run: cat edges/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+        run: |
+          cat edges/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          cat edges/ibs_confirm/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

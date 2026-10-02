@@ -503,3 +503,17 @@ An edge is claimed only if both hold:
    is positive on at least 2 of the 3.
 
 After this run, no re-tuning on these results.
+- Result ([run 36951547607](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36951547607)):
+  **no edge under the pre-registered rule.**
+  - SPY effect per active day (t), then the other ETFs pooled:
+    - TOM: +1.0 bp (0.26); others pooled t 0.04.
+    - OVN: -0.9 bp (-0.63); others pooled t 0.47.
+    - IBS: +6.5 bp (0.99); others pooled t 1.84, positive 3/3.
+    - IMHV: -4.0 bp (-2.72); others pooled t -2.98.
+  - Nothing survived Holm on SPY.
+  - IBS is the only lead: positive on all 4 ETFs (QQQ +18.9 bp, t 2.38).
+- Next test, fixed before running (`playground/edges/ibs_confirm.py`):
+  - The identical IBS rule on 11 ETFs never used before: the nine sector
+    SPDRs plus EFA and EEM, over 2014+.
+  - Pass if the pooled per-day excess > 0 with Newey-West one-sided
+    p < 0.05 AND the effect is positive on at least 2/3 of the basket.
