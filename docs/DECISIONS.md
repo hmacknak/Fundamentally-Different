@@ -354,6 +354,7 @@ designed, not a bug.
   returns nothing, the job fails rather than falling back to synthetic data.
 - Owner answers (2026-10-02): the stop goes below the low that started the
   move (origin low), and 1m structure resets each session. Both match the
-  implementation. The owner is unsure whether their BOS/CHoCH definition
-  matches ours. That stays open until real trade charts have been reviewed. A year-plus 1m data source (Polygon or
+  implementation. The owner then confirmed the BOS/CHoCH logic
+  is correct, so the strategy definition is locked. Any later rule changes
+  count as new variants and must be tracked for multiple-testing purposes. A year-plus 1m data source (Polygon or
   Alpaca, both need a key) is needed before any result means anything.

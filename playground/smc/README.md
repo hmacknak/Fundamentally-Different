@@ -108,10 +108,9 @@ Without a local setup, the **SMC backtest** GitHub Actions workflow
 
 - **Stop:** below the low that started the move (the origin low), as implemented. Confirmed.
 - **1m structure:** resets every session, as implemented. Confirmed.
-- **BOS/CHoCH definition:** the owner is unsure whether it matches their own
-  charting. Still open. It should be settled by looking at real trade charts
-  (`--plot-trades`, or the `trade_*.png` files in the workflow artifact),
-  not by changing code first. The common alternatives are:
-  - counting a break on a wick instead of a close;
-  - a smaller or larger swing size (`--swing-n 3` or `8`);
-  - not requiring the prior lower-highs/lower-lows trend.
+- **BOS/CHoCH definition:** the owner reviewed it and confirmed the logic
+  is correct (close-based breaks, 5-bar fractal swings, and a prior
+  lower-highs/lower-lows trend required). Confirmed.
+
+The strategy definition is now locked. Next step: run it on a year or more
+of 1-minute data, which Yahoo cannot supply.
