@@ -245,3 +245,17 @@ def test_confirm_runs_and_locks_variant(tmp_path):
     out = tmp_path / "confirm"
     assert cs.main([*paths, "--out", str(out)]) == 0
     assert "CONFIRMED" in (out / "report.md").read_text()
+
+
+def test_alpaca_download_retries_on_rate_limit():
+    import run_spy
+    pages = [_FakeResp(429, {"message": "too many requests."}),
+             _FakeResp(200, {"bars": [_alpaca_bar("2024-03-01T14:30:00Z", 500.0)],
+                             "next_page_token": None})]
+    df = run_spy.download_alpaca_1m("SPY", 1, "k", "s", session=_FakeSession(pages),
+                                    backoff=0.0)
+    assert list(df["close"]) == [500.0]
+    with pytest.raises(RuntimeError, match="HTTP 429"):
+        run_spy.download_alpaca_1m(
+            "SPY", 1, "k", "s", backoff=0.0, retries=1,
+            session=_FakeSession([_FakeResp(429, {}), _FakeResp(429, {})]))

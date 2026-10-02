@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -62,8 +63,8 @@ ALPACA_BARS_URL = "https://data.alpaca.markets/v2/stocks/{ticker}/bars"
 
 
 def download_alpaca_1m(ticker: str, years: float, key: str, secret: str,
-                       feed: str = "sip", session: requests.Session | None = None
-                       ) -> pd.DataFrame:
+                       feed: str = "sip", session: requests.Session | None = None,
+                       retries: int = 6, backoff: float = 2.0) -> pd.DataFrame:
     """Fetch raw (unadjusted) 1m bars from Alpaca's market-data API, paging
     through `next_page_token`. Alpaca stamps bars at their start, in UTC.
 
@@ -79,8 +80,12 @@ def download_alpaca_1m(ticker: str, years: float, key: str, secret: str,
               "adjustment": "raw", "feed": feed, "sort": "asc"}
     rows: list[dict] = []
     while True:
-        resp = http.get(ALPACA_BARS_URL.format(ticker=ticker), headers=headers,
-                        params=params, timeout=60)
+        for attempt in range(retries + 1):
+            resp = http.get(ALPACA_BARS_URL.format(ticker=ticker), headers=headers,
+                            params=params, timeout=60)
+            if resp.status_code != 429 or attempt == retries:
+                break
+            time.sleep(min(60.0, backoff * 2 ** attempt))  # rate limited: back off
         if resp.status_code != 200:
             raise RuntimeError(f"Alpaca returned HTTP {resp.status_code}: "
                                f"{resp.text[:300]}")

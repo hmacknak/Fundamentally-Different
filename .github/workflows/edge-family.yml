@@ -23,6 +23,8 @@ jobs:
       - run: >
           python playground/edges/fetch_daily.py SPY QQQ IWM DIA
           XLB XLE XLF XLI XLK XLP XLU XLV XLY EFA EEM --out data/daily
+      - run: python playground/edges/ibs_confirm.py --daily-dir data/daily --out edges/ibs_confirm
+      - run: python playground/edges/rel_ibs.py --daily-dir data/daily --out edges/rel_ibs
       - name: Download 1m bars from Alpaca
         run: |
           mkdir -p data/intraday
@@ -36,8 +38,6 @@ jobs:
       - run: >
           python playground/edges/edge_family.py --daily-dir data/daily
           --intraday-dir data/intraday --out edges
-      - run: python playground/edges/ibs_confirm.py --daily-dir data/daily --out edges/ibs_confirm
-      - run: python playground/edges/rel_ibs.py --daily-dir data/daily --out edges/rel_ibs
       - name: Job summary
         if: always()
         run: |
