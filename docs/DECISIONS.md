@@ -422,3 +422,15 @@ Written and committed before any result was seen. The protocol lives in
     on at least 2 of the 3 tickers.
   - Whatever the outcome, there will be no further re-tuning on these
     tickers. A pass would justify forward paper trading, not real money.
+- Cross-ticker result ([run 36948445551](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36948445551)):
+  **NOT CONFIRMED.**
+  - QQQ: 151 trades, -0.097R (t -1.44).
+  - IWM: 157 trades, -0.018R (t -0.27).
+  - DIA: 170 trades, +0.021R (t +0.30).
+  - Pooled: 478 trades, -0.029R, day-clustered t -0.71, p 0.76. Positive
+    on 1 of 3 tickers.
+- Conclusion: the SPY 5m/swing-3/1:1 result is best explained as a lucky
+  pick from the search. Across everything tested, this BOS/CHoCH-retest
+  family shows no edge after costs on liquid US index ETFs. Per the
+  pre-registration, there will be no re-tuning on these results. Any
+  further work needs a new, separately pre-registered hypothesis.
