@@ -156,3 +156,17 @@ def test_live_aborts_on_unadjusted_split():
     m.loc[last_day, ["open", "high", "low", "close"]] /= 2  # fake 2:1 split
     with pytest.raises(ValueError, match="implausible"):
         rl.daily_from_minutes(m)
+
+
+def test_compare_spy_runs(tmp_path):
+    import compare_spy as cs
+    import rel_ibs as ri
+    dd = tmp_path / "d"
+    dd.mkdir()
+    for i, tk in enumerate((*ri.SECTORS, "SPY")):
+        x = daily(7200, seed=90 + i)
+        x.index = pd.bdate_range("1998-06-01", periods=7200)
+        x.to_csv(dd / f"{tk}.csv")
+    assert cs.main(["--daily-dir", str(dd), "--out", str(tmp_path / "o")]) == 0
+    t = pd.read_csv(tmp_path / "o" / "compare.csv")
+    assert {"Relative IBS", "SPY buy & hold"} <= set(t["strategy"])

@@ -1,0 +1,24 @@
+name: Relative IBS vs SPY (playground, descriptive)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/edges/compare_spy.py"
+      - ".github/workflows/compare-spy.yml"
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - run: python playground/edges/fetch_daily.py SPY XLB XLE XLF XLI XLK XLP XLU XLV XLY --out data/daily
+      - run: python playground/edges/compare_spy.py --daily-dir data/daily --out compare_spy
+      - name: Job summary
+        if: always()
+        run: cat compare_spy/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
