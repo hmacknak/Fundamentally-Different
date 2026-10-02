@@ -93,3 +93,21 @@ def test_ibs_confirm_runs_on_basket(tmp_path):
     out = tmp_path / "c"
     assert ic.main(["--daily-dir", str(dd), "--out", str(out)]) == 0
     assert "CONFIRMED" in (out / "report.md").read_text()
+
+
+def test_rel_ibs_requires_market_not_weak_and_is_causal(tmp_path):
+    import rel_ibs as ri
+    sec = daily(400, seed=60)
+    mkt = daily(400, seed=61)
+    sec.index = mkt.index = pd.bdate_range("2005-01-03", periods=400)
+    f = ri.sector_frame(sec, mkt)
+    s_ibs, m_ibs = ri.ibs(sec), ri.ibs(mkt)
+    expected = ((s_ibs < 0.2) & (m_ibs >= 0.2)).shift(1, fill_value=False)
+    pd.testing.assert_series_equal(f["active"], expected.loc[f.index], check_names=False)
+    dd = tmp_path / "d"
+    dd.mkdir()
+    for i, tk in enumerate((*ri.SECTORS, "SPY")):
+        x = daily(5000, seed=70 + i)
+        x.index = pd.bdate_range("1998-06-01", periods=5000)
+        x.to_csv(dd / f"{tk}.csv")
+    assert ri.main(["--daily-dir", str(dd), "--out", str(tmp_path / "o")]) == 0

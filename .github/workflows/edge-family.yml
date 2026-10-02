@@ -37,11 +37,13 @@ jobs:
           python playground/edges/edge_family.py --daily-dir data/daily
           --intraday-dir data/intraday --out edges
       - run: python playground/edges/ibs_confirm.py --daily-dir data/daily --out edges/ibs_confirm
+      - run: python playground/edges/rel_ibs.py --daily-dir data/daily --out edges/rel_ibs
       - name: Job summary
         if: always()
         run: |
           cat edges/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           cat edges/ibs_confirm/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          cat edges/rel_ibs/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

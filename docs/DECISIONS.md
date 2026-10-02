@@ -517,3 +517,18 @@ After this run, no re-tuning on these results.
     SPDRs plus EFA and EEM, over 2014+.
   - Pass if the pooled per-day excess > 0 with Newey-West one-sided
     p < 0.05 AND the effect is positive on at least 2/3 of the basket.
+- IBS confirmation result ([run 36951993473](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36951993473)):
+  **NOT CONFIRMED.**
+  - The 11 new ETFs pooled per day give +1.10 bp, t 0.40, p 0.35.
+  - 10 of 11 are positive. Only XLK (+22.1 bp, t 2.66) and EEM (+14.1 bp,
+    t 2.38) are individually significant.
+  - The per-ETF effects average about +6 bp, but the per-day pooled mean is
+    only +1 bp. This suggests the reversal comes from sector-specific weak
+    closes and not market-wide ones.
+- That observation is a new hypothesis formed from 2014+ data, so it is
+  tested only on untouched data (`playground/edges/rel_ibs.py`):
+  - Sample: the nine sector SPDRs, 1999-2013.
+  - Signal: sector IBS < 0.2 while SPY IBS >= 0.2.
+  - Costs: 2 bp per side.
+  - Pass if the pooled per-day excess > 0 with Newey-West one-sided
+    p < 0.05 AND the effect is positive on at least 6 of 9 sectors.
