@@ -23,6 +23,7 @@ jobs:
       - run: python playground/edges/fetch_daily.py SPY QQQ IWM DIA --out data/daily
       - name: Download 1m bars from Alpaca
         run: |
+          mkdir -p data/intraday
           for t in SPY QQQ IWM DIA; do
             python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
               --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only

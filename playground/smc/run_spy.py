@@ -147,6 +147,7 @@ def main(argv=None) -> int:
         else:
             raw = download_yahoo_1m(a.ticker)
             desc = "Yahoo Finance via yfinance, interval=1m, auto_adjust=False, prepost=False"
+        os.makedirs(os.path.dirname(a.save) or ".", exist_ok=True)
         raw.to_csv(a.save)
         csv_path = a.save
         meta = {"ticker": a.ticker, "source": desc, "retrieved_utc": retrieved,
