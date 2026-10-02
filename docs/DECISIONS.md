@@ -358,3 +358,22 @@ designed, not a bug.
   is correct, so the strategy definition is locked. Any later rule changes
   count as new variants and must be tracked for multiple-testing purposes. A year-plus 1m data source (Polygon or
   Alpaca, both need a key) is needed before any result means anything.
+
+## 2026-10-02 — First multi-year SMC backtest result (SPY, Alpaca SIP, 5 years)
+
+- Run: [Actions run 36947342328](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36947342328),
+  2021-10-04 .. 2026-10-01, 1,254 sessions, 488,644 regular-hours 1m bars
+  (about 99.9% of the expected 390 bars per session). Locked rules, default
+  parameters, no tuning. Holdout = 2025-10-01 .. 2026-10-01.
+- Result, net R per trade (t-stat):
+  - 1m: 1,378 trades, -0.014R (t -0.52). In-sample -0.036R (t -1.18),
+    holdout +0.080R (t +1.33).
+  - 5m: 365 trades, +0.058R (t +1.20). In-sample +0.049R (t +0.92),
+    holdout +0.096R (t +0.87).
+  - 15m/30m/60m: 55, 18 and 6 trades, too few to judge.
+- Conclusion: no statistically meaningful edge at any timeframe. Five
+  timeframes were compared, so the best row (5m, t 1.2) is well within
+  what chance alone produces. 5m is the only row positive in both periods.
+  It is a candidate for a pre-registered follow-up, not a tradeable result.
+- 1m dollar return (+0.16%) and total R (-19.5) disagree in sign because
+  the 4x leverage cap shrinks size on tight stops. R is the fairer measure.
