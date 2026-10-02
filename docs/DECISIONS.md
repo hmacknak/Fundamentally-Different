@@ -352,7 +352,8 @@ designed, not a bug.
 - Data: Yahoo 1m via yfinance, ~30 days only, with provenance (source and
   retrieval time) written to `data_provenance.json`. If the download
   returns nothing, the job fails rather than falling back to synthetic data.
-- Open questions for the owner: stop below the origin low vs the nearest
-  swing low; whether 1m structure should reset each session; whether their
-  own BOS/CHoCH definition differs. A year-plus 1m data source (Polygon or
+- Owner answers (2026-10-02): the stop goes below the low that started the
+  move (origin low), and 1m structure resets each session. Both match the
+  implementation. The owner is unsure whether their BOS/CHoCH definition
+  matches ours. That stays open until real trade charts have been reviewed. A year-plus 1m data source (Polygon or
   Alpaca, both need a key) is needed before any result means anything.

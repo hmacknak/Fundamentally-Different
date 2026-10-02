@@ -104,8 +104,14 @@ Without a local setup, the **SMC backtest** GitHub Actions workflow
 - Keep a count of every variant tried, and judge parameters on a later
   holdout period with a deflated-Sharpe-style correction.
 
-## Open questions for the user
+## Owner decisions (2026-10-02)
 
-- Should the stop sit below the origin low (current), or the nearest swing low?
-- At 1m, should structure reset each session (current) or carry over?
-- Does your own BOS/CHoCH or swing definition differ from the one above?
+- **Stop:** below the low that started the move (the origin low), as implemented. Confirmed.
+- **1m structure:** resets every session, as implemented. Confirmed.
+- **BOS/CHoCH definition:** the owner is unsure whether it matches their own
+  charting. Still open. It should be settled by looking at real trade charts
+  (`--plot-trades`, or the `trade_*.png` files in the workflow artifact),
+  not by changing code first. The common alternatives are:
+  - counting a break on a wick instead of a close;
+  - a smaller or larger swing size (`--swing-n 3` or `8`);
+  - not requiring the prior lower-highs/lower-lows trend.
