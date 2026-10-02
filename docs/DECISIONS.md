@@ -561,3 +561,18 @@ After this run, no re-tuning on these results.
   - Fix: download with `adjustment=all`, and abort on any close-to-close
     move above 25%. The pre-registered rule, period and pass bar are
     unchanged. The rerun result below is the one that counts.
+- Descriptive comparison with SPY buy-and-hold ([run 36954837392](https://github.com/hmacknak/Fundamentally-Different/actions/runs/36954837392),
+  close-based signal, adjusted Yahoo daily data, 2 bp per side, cash at 0%
+  when flat):
+
+  | Period | Strategy | CAGR | Sharpe | Max DD | In market |
+  |---|---|---|---|---|---|
+  | 1999-2013 | Relative IBS | +8.5% | 0.74 | -19.8% | 35% |
+  | 1999-2013 | SPY | +4.6% | 0.32 | -55.2% | 100% |
+  | 2014-2026 | Relative IBS | -0.4% | 0.03 | -32.7% | 39% |
+  | 2014-2026 | SPY | +13.7% | 0.84 | -33.7% | 100% |
+
+  - The idealised close-based version on clean adjusted data also earns
+    nothing after 2013.
+  - So the failure is not caused by the 15:50 timing or the unadjusted-data
+    bug: the effect itself has decayed. Status: dead for current trading.
