@@ -1,0 +1,41 @@
+name: SMC variant search (playground, pre-registered)
+
+# Playground only. Downloads 5 years of SPY 1m bars from Alpaca and runs the
+# pre-registered variant search in playground/smc/research_smc.py (protocol
+# recorded in docs/DECISIONS.md). Needs the ALPACA_API_KEY and
+# ALPACA_API_SECRET repository secrets.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/smc/research_smc.py"
+      - ".github/workflows/smc-research.yml"
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - run: >
+          python playground/smc/run_spy.py --source alpaca --years 5
+          --out research --save research/spy_1min.csv --download-only
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: python playground/smc/research_smc.py research/spy_1min.csv --out research
+      - name: Job summary
+        if: always()
+        run: cat research/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Drop the raw CSV from the artifact
+        if: always()
+        run: rm -f research/spy_1min.csv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smc-research-results
+          path: research/

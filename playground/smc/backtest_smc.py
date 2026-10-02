@@ -58,6 +58,8 @@ class Params:
     risk_pct: float = 1.0  # % of equity risked per trade
     max_leverage: float = 4.0
     carry: bool = False  # keep swing structure across sessions
+    sides: str = "both"  # "both", "long" or "short"
+    vwap_filter: bool = False  # longs only above session VWAP, shorts only below
 
 
 def _hhmm(s: str) -> int:
@@ -238,6 +240,8 @@ def backtest(df: pd.DataFrame, p: Params) -> pd.DataFrame:
     mins = (idx.hour * 60 + idx.minute).to_numpy()
     day = idx.normalize()
     new_session = np.r_[True, day[1:] != day[:-1]]
+    allowed = {+1: p.sides in ("both", "long"), -1: p.sides in ("both", "short")}
+    vwap = session_vwap(df) if p.vwap_filter else None
     e_start, e_end, flat_t = _hhmm(p.entry_start), _hhmm(p.entry_end), _hhmm(p.flatten)
 
     dets = {+1: Detector(h, lo, c, p.swing_n), -1: Detector(-lo, -h, -c, p.swing_n)}
@@ -325,7 +329,9 @@ def backtest(df: pd.DataFrame, p: Params) -> pd.DataFrame:
             s = d.update(t)
             if s is None:
                 continue
-            ok = pos is None and e_start <= mins[t] < e_end
+            ok = pos is None and e_start <= mins[t] < e_end and allowed[side]
+            if ok and vwap is not None:
+                ok = side * (c[t] - vwap[t]) > 0
             entry = side * s.choch_level
             stop = side * (s.origin_low - p.stop_buffer)
             risk = abs(entry - stop)
@@ -352,6 +358,21 @@ def backtest(df: pd.DataFrame, p: Params) -> pd.DataFrame:
         t = len(df) - 1
         close_pos(t, c[t] - pos["side"] * p.slippage, "end_of_data")
     return pd.DataFrame(trades) if trades else _empty_trades()
+
+
+def session_vwap(df: pd.DataFrame) -> np.ndarray:
+    """Running VWAP from each session's open, using typical price. Uses
+    only bars up to and including t, so it is known at bar t's close."""
+    vol = df["volume"].to_numpy(float)
+    if not np.isfinite(vol).all() or vol.sum() <= 0:
+        raise ValueError("vwap_filter needs real volume data; this file has none")
+    tp = (df["high"] + df["low"] + df["close"]).to_numpy(float) / 3
+    day = df.index.normalize()
+    pv = pd.Series(tp * vol).groupby(day).cumsum().to_numpy()
+    cv = pd.Series(vol).groupby(day).cumsum().to_numpy()
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = pv / cv
+    return np.where(cv > 0, out, tp)
 
 
 def _empty_trades() -> pd.DataFrame:
@@ -524,7 +545,8 @@ def build_params(a: argparse.Namespace) -> Params:
                   max_armed_bars=a.max_armed_bars, entry_start=a.entry_start,
                   entry_end=a.entry_end, flatten=a.flatten, commission=a.commission,
                   slippage=a.slippage, equity=a.equity, risk_pct=a.risk_pct,
-                  max_leverage=a.max_leverage, carry=a.carry)
+                  max_leverage=a.max_leverage, carry=a.carry, sides=a.sides,
+                  vwap_filter=a.vwap_filter)
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -545,6 +567,9 @@ def parse_args(argv=None) -> argparse.Namespace:
         ap.add_argument("--" + name.replace("_", "-"), dest=name, type=typ,
                         default=getattr(d, name))
     ap.add_argument("--carry", action="store_true", help="keep structure across sessions")
+    ap.add_argument("--sides", choices=["both", "long", "short"], default="both")
+    ap.add_argument("--vwap-filter", action="store_true",
+                    help="longs only above session VWAP, shorts only below")
     ap.add_argument("--no-scale", action="store_true",
                     help="do not rescale settings for higher timeframes")
     ap.add_argument("--start")

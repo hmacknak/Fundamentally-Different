@@ -377,3 +377,27 @@ designed, not a bug.
   It is a candidate for a pre-registered follow-up, not a tradeable result.
 - 1m dollar return (+0.16%) and total R (-19.5) disagree in sign because
   the 4x leverage cap shrinks size on tight stops. R is the fairer measure.
+
+## 2026-10-02 — Pre-registered variant search for the SMC strategy
+
+Written and committed before any result was seen. The protocol lives in
+`playground/smc/research_smc.py` and must not be edited after the run.
+
+- Data: Alpaca SIP 1m SPY, last 5 years. In-sample is everything before
+  the last 12 months; holdout is the last 12 months.
+- Grid: 72 variants:
+  - timeframe 1m or 5m;
+  - swing size {3, 5, 8} at 1m and {2, 3, 5} at 5m;
+  - reward:risk {1, 1.5, 2};
+  - first entry at 09:35 or 10:00;
+  - session-VWAP trend filter off or on (longs only above VWAP, shorts only
+    below, a new rule added for this search).
+
+  The core BOS/CHoCH logic is unchanged.
+- Selection: rank in-sample by t-stat of net R per trade, among variants
+  with at least 100 trades. The luck benchmark is the expected best t of 72
+  no-edge variants, about 2.41.
+- Holdout: the top 3 picks, unchanged, run once.
+- An edge is claimed only if a variant beats 2.41 in-sample AND on the
+  holdout has net R > 0 with a one-sided p < 0.05/3 (t > 2.13). Anything
+  less is reported as no edge, however good the best row looks.

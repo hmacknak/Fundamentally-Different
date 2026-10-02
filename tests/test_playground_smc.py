@@ -192,3 +192,42 @@ def test_runner_reports_holdout_split_on_long_history(tmp_path, capsys):
     assert "In-sample" in printed and "Holdout" in printed
     assert (out / "holdout" / "compare.txt").exists()
     assert (out / "in_sample" / "compare.txt").exists()
+
+
+def test_sides_filter_restricts_direction():
+    bars = random_walk_bars(sessions=30)
+    both = bt.backtest(bars, bt.Params())
+    longs = bt.backtest(bars, bt.Params(sides="long"))
+    assert set(both["side"]) == {"long", "short"}
+    assert set(longs["side"]) == {"long"}
+
+
+def test_session_vwap_is_causal_and_filter_runs():
+    bars = random_walk_bars(sessions=3)
+    v = bt.session_vwap(bars)
+    v_cut = bt.session_vwap(bars.iloc[:500])
+    np.testing.assert_allclose(v[:500], v_cut)
+    first = bars.iloc[0]
+    assert v[0] == pytest.approx((first["high"] + first["low"] + first["close"]) / 3)
+    tr = bt.backtest(random_walk_bars(sessions=30), bt.Params(vwap_filter=True))
+    assert len(tr) > 0
+
+
+def test_vwap_filter_fails_loudly_without_volume():
+    bars = random_walk_bars(sessions=2).assign(volume=0.0)
+    with pytest.raises(ValueError, match="volume"):
+        bt.backtest(bars, bt.Params(vwap_filter=True))
+
+
+def test_research_protocol_runs_end_to_end(tmp_path):
+    import research_smc as rs
+    assert len(rs.GRID) == 72 and len({str(g) for g in rs.GRID}) == 72
+    assert 2.3 < rs.expected_max_t(72) < 2.5
+    csv = tmp_path / "rw.csv"
+    random_walk_bars(sessions=150, seed=5).rename_axis("timestamp").to_csv(csv)
+    out = tmp_path / "research"
+    assert rs.main([str(csv), "--holdout-months", "2", "--out", str(out),
+                    "--workers", "1", "--grid-limit", "4"]) == 0
+    report = (out / "report.md").read_text()
+    assert "EDGE" in report
+    assert (out / "in_sample_grid.csv").exists()

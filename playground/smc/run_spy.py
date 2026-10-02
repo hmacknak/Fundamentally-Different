@@ -122,6 +122,8 @@ def main(argv=None) -> int:
     ap.add_argument("--compare", default="1,5,15,30,60")
     ap.add_argument("--out", default="results")
     ap.add_argument("--plot-trades", type=int, default=10)
+    ap.add_argument("--download-only", action="store_true",
+                    help="save the CSV and provenance, skip the backtests")
     a = ap.parse_args(argv)
 
     os.makedirs(a.out, exist_ok=True)
@@ -154,6 +156,9 @@ def main(argv=None) -> int:
             json.dump(meta, f, indent=2)
         print(f"saved {len(raw)} bars from {source} to {a.save} "
               f"({meta['first_bar']} .. {meta['last_bar']})")
+
+    if a.download_only:
+        return 0
 
     print("\n=== Full period ===")
     rc = run_period(csv_path, a.compare, os.path.join(a.out, "compare"))
