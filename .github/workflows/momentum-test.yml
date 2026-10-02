@@ -1,0 +1,47 @@
+name: Intraday momentum test (playground, pre-registered)
+
+# Playground only. Pre-registered test of market intraday momentum (Gao, Han,
+# Li and Zhou 2018) on SPY, with QQQ/IWM/DIA as confirmation. Protocol in
+# playground/momentum/intraday_momentum.py and docs/DECISIONS.md. Needs the
+# ALPACA_API_KEY and ALPACA_API_SECRET repository secrets.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/momentum/**"
+      - ".github/workflows/momentum-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - name: Download 1m bars (as far back as Alpaca serves)
+        run: |
+          for t in SPY QQQ IWM DIA; do
+            python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
+              --out "momentum/data_$t" --save "momentum/$t.csv" --download-only
+          done
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: >
+          python playground/momentum/intraday_momentum.py
+          SPY=momentum/SPY.csv QQQ=momentum/QQQ.csv IWM=momentum/IWM.csv DIA=momentum/DIA.csv
+          --out momentum
+      - name: Job summary
+        if: always()
+        run: cat momentum/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Drop raw CSVs from the artifact
+        if: always()
+        run: rm -f momentum/*.csv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: momentum-results
+          path: momentum/

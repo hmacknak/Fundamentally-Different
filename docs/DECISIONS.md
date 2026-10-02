@@ -434,3 +434,29 @@ Written and committed before any result was seen. The protocol lives in
   family shows no edge after costs on liquid US index ETFs. Per the
   pre-registration, there will be no re-tuning on these results. Any
   further work needs a new, separately pre-registered hypothesis.
+
+## 2026-10-02 — Pre-registered test of market intraday momentum
+
+Written and committed before any result was seen. The protocol is in
+`playground/momentum/intraday_momentum.py`.
+
+- Hypothesis (Gao, Han, Li and Zhou, JFE 2018): the return from the prior
+  close to 10:00 ET predicts the return over the last half hour.
+- Rule, taken from the paper with nothing fitted:
+  - At the 15:30 bar open, go long 1x if that return is positive, short if
+    negative.
+  - Exit at the 15:59 bar close.
+  - Costs are $0.005/share commission plus $0.01/share slippage, each side.
+  - Days missing the needed bars, such as half days and the day after one,
+    are skipped.
+- Data: Alpaca SIP 1m bars, as far back as Alpaca serves (about 2016), for
+  SPY, QQQ, IWM and DIA.
+- An edge is claimed only if all three hold:
+  1. SPY over the full history: net mean > 0 with Newey-West (5 lags)
+     one-sided p < 0.05.
+  2. QQQ, IWM and DIA pooled per day: net mean > 0, p < 0.05, and positive
+     on at least 2 of the 3.
+  3. SPY over the last 12 months: net mean > 0 (a sign check only).
+- Known prior: later studies report the effect weakened after the paper's
+  1993–2013 sample, except on volatile days. We test only the plain rule.
+  Any volatility-conditioned variant would be a new pre-registration.
