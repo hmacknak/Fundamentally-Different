@@ -576,3 +576,32 @@ After this run, no re-tuning on these results.
     nothing after 2013.
   - So the failure is not caused by the 15:50 timing or the unadjusted-data
     bug: the effect itself has decayed. Status: dead for current trading.
+
+## 2026-10-22 — Pre-registered order-flow test on 1m bars
+
+Written and committed before any result was seen. The protocol is in
+`playground/orderflow/orderflow_test.py`.
+
+- Limitation: 1m OHLCV bars carry no trade direction, so order flow is
+  estimated with Bulk Volume Classification (Easley, Lopez de Prado and
+  O'Hara 2012).
+  - Each bar's delta = volume x (2 x Phi(dp / sigma) - 1), with a causal
+    390-bar sigma.
+  - This is a proxy. A negative result does not rule out strategies that
+    use real tick or footprint data.
+- Rules: every 15 minutes from 10:00 to 15:30 ET, hold 15 minutes, no
+  overlapping trades.
+  - **H1 FLOW:** trade in the direction of the last 15 minutes' summed
+    delta.
+  - **H2 DIV:** delta divergence. At a 30-minute closing high with
+    negative 30-minute delta, go short; at a low with positive delta, go
+    long.
+- Setup:
+  - Costs are $0.005/share commission + $0.01/share slippage per side.
+  - Data: Alpaca SIP 1m, `adjustment=all`, 2016+.
+- An edge is claimed only if both hold:
+  1. On SPY, Holm across H1 and H2 at family alpha 0.05, using per-day
+     means of net trade returns with Newey-West errors.
+  2. QQQ, IWM and DIA pooled give p < 0.05 and are positive on at least
+     2 of the 3.
+- Gross results are reported for information only.

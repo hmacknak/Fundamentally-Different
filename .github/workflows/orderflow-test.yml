@@ -1,0 +1,41 @@
+name: Order-flow test (playground, pre-registered)
+
+# Playground only. Bulk-volume-classified order flow from 1m bars, two
+# pre-registered rules, SPY primary with QQQ/IWM/DIA confirmation. Protocol
+# in playground/orderflow/orderflow_test.py and docs/DECISIONS.md.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "playground/orderflow/**"
+      - ".github/workflows/orderflow-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r playground/requirements.txt
+      - name: Download 1m bars from Alpaca
+        run: |
+          mkdir -p data/intraday
+          for t in SPY QQQ IWM DIA; do
+            python playground/smc/run_spy.py --source alpaca --years 11 --ticker "$t" \
+              --adjustment all --out "data/meta_$t" --save "data/intraday/$t.csv" --download-only
+          done
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      - run: python playground/orderflow/orderflow_test.py --intraday-dir data/intraday --out orderflow
+      - name: Job summary
+        if: always()
+        run: cat orderflow/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orderflow-results
+          path: orderflow/results.csv
