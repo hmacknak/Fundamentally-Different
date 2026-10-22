@@ -605,3 +605,16 @@ Written and committed before any result was seen. The protocol is in
   2. QQQ, IWM and DIA pooled give p < 0.05 and are positive on at least
      2 of the 3.
 - Gross results are reported for information only.
+- Result ([run 39720763757](https://github.com/hmacknak/Fundamentally-Different/actions/runs/39720763757),
+  2016+, about 2,716 days): **NO EDGE.** Both rules failed on every ticker.
+  - **FLOW:** 54k-62k trades per ticker.
+    - Gross: SPY +0.01 bp, QQQ -0.02, IWM -0.02, DIA -0.13 bp. The largest
+      |t| is 1.8.
+    - Net: about -0.9 to -1.9 bp per trade, t -14 to -20.
+  - **DIV:** 1.5k-2k trades per ticker.
+    - Gross: -0.55 to +0.28 bp, all |t| < 1.3.
+    - Net: -0.8 to -2.0 bp, t -2.6 to -4.7.
+  - Estimated order flow from 1m bars carries no usable information about
+    the next 15 minutes. Costs alone set the sign of the result.
+  - This does not test strategies built on real tick, bid/ask or footprint
+    data, which 1m bars cannot reproduce.
